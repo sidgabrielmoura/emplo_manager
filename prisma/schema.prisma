@@ -1,0 +1,329 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  RH
+}
+
+enum CompanyStatus {
+  ACTIVE
+  BLOCKED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  BLOCKED
+  TERMINATED
+  PENDING
+}
+
+enum ContractStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum DocumentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum DocumentType {
+  ASO
+  RG_CNH
+  CTPS_ESOCIAL
+  OS_NR01
+  VACCINE_CARD
+  LIFE_INSURANCE_208
+  REGISTRATION_FORM
+  NR01_TRAINING
+  NR06_EPI_TRAINING
+  FIRST_AID_TRAINING_208
+  EPI_FORM_208
+  FIRE_FIGHTING_TRAINING_208
+}
+
+enum GenderEnum {
+  MALE
+  FEMALE
+}
+
+enum RotationEnum {
+  MORNING
+  AFTERNOON
+  NIGHT
+}
+
+enum TrainingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum TrainingType {
+  NR10_SEGURANCA_ELETRICIDADE_40H
+  NR10_SEP_SISTEMA_ELETRICO_POTENCIA
+  CARTA_ANUENCIA_SEP_208
+  CNH_CARTEIRA_NACIONAL_HABILITACAO
+  TREINAMENTO_DIRECAO_DEFENSIVA_208
+  CURSO_MANUSEIO_EMERGENCIAS_QUIMICAS
+  CARTA_ANUENCIA_NR12_208
+  NR12_OPERACAO_MANUTENCAO_MAQUINAS_EQUIPAMENTOS_208
+  NR35_TRABALHO_ALTURA_RESGATE_AEROGERADORES_16H
+  CARTA_ANUENCIA_NR35_208
+  NR11_TALHA_ELETRICA_208
+  COMPROVANTE_QUALIFICACAO
+  GWO_CERTIFICADO_TREINAMENTO_WINDA_208
+  GWO_BST_TRABALHO_RESGATE_ALTURA_16H_208
+  GWO_BST_PRIMEIROS_SOCORROS_208
+  GWO_BST_MANUSEIO_MANUAL_208
+  GWO_BST_COMBATE_INCENDIO_208
+  ADVANCED_RESCUE_TRAINING_ART
+}
+
+enum CompanyDocumentType {
+  CNPJ_SOCIAL_CONTRACT
+  PGR_COMPANY
+  PCMSO_COMPANY
+  ALVARA_LOCALIZACAO
+  AET_ERGONOMICA
+  LICENCA_AMBIENTAL
+  LTCAT
+  NR15_INSALUBRIDADE
+  NR16_PERICULOSIDADE
+  PCA_AUDITIVA
+  PPR_RESPIRATORIA
+  PGR_CPFL
+  PCMSO_CPFL
+  CRF_FGTS
+  GUIA_FGTS_DIGITAL
+  GUIA_DARF_PREVIDENCIARIO
+  CND_DIVIDA_ATIVA_UNIAO
+  FOLHA_PAGAMENTO_RESUMO
+  COMPROVANTE_PAGAMENTO_SALARIO
+  CONVENCAO_COLETIVA
+  ESPELHO_DE_PONTO
+  DECLARACAO_DCTFWEB
+  DECLARACAO_ALOCACAO
+  DECLARACAO_DEMITIDOS_ESOCIAL
+  DECLARACAO_MENSAL_FERIAS
+  RECIBO_FERIAS_PAGAMENTO
+  CND_DEBITOS_TRABALHISTAS
+  GUIA_DAS_PAGAMENTO
+}
+
+model Superadmin {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(SUPERADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  companyId String?
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  notificationPreferences NotificationPreferences?
+
+  @@index([companyId])
+  @@index([role])
+}
+
+model NotificationPreferences {
+  id                       String   @id @default(uuid())
+  userId                   String   @unique
+  user                     User     @relation(fields: [userId], references: [id])
+  documentExpirationAlerts Boolean  @default(true)
+  newEmployeeAlerts        Boolean  @default(true)
+  email                    String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model Company {
+  id          String            @id @default(uuid())
+  name        String
+  imageUrl    String
+  cnpj        String?
+  email       String?
+  phone       String?
+  address     String?
+  state       String?
+  city        String?
+  responsible String?
+  status      CompanyStatus     @default(ACTIVE)
+  users       User[]
+  employees   Employee[]
+  documents   CompanyDocument[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+}
+
+model Employee {
+  id           String           @id @default(uuid())
+  companyId    String
+  company      Company          @relation(fields: [companyId], references: [id])
+  name         String
+  image        String
+  cpf          String
+  gender       GenderEnum
+  rg           String
+  position     String
+  email        String
+  supervisor   String?
+  registration String?
+  rotation     RotationEnum?
+  status       EmployeeStatus   @default(ACTIVE)
+  contract     Contract?
+  contact      EmployeeContact?
+  address      EmployeeAddress?
+  documents    Document[]
+  trainings    Training[]
+  birthDate    DateTime
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  dismissedAt  DateTime?
+
+  passportEmissions PassportEmission[]
+
+  @@unique([cpf])
+  @@unique([email])
+  @@index([companyId])
+  @@index([status])
+}
+
+model EmployeeContact {
+  id String @id @default(uuid())
+
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  phone            String?
+  emergencyContact String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EmployeeAddress {
+  id String @id @default(uuid())
+
+  employeeId String   @unique
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  cep        String?
+  address    String?
+  number     String?
+  district   String?
+  city       String?
+  complement String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contract {
+  id         String         @id @default(uuid())
+  employeeId String         @unique
+  employee   Employee       @relation(fields: [employeeId], references: [id])
+  startDate  DateTime
+  endDate    DateTime?
+  status     ContractStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  deletedAt  DateTime?
+}
+
+model Document {
+  id        String         @id @default(uuid())
+  type      DocumentType
+  status    DocumentStatus @default(PENDING)
+  fileUrl   String?
+  issuedAt  DateTime?      @db.Date
+  expiresAt DateTime?      @db.Date
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employeeId String?
+
+  @@unique([employeeId, type])
+  @@index([employeeId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model Training {
+  id        String         @id @default(uuid())
+  type      TrainingType
+  status    TrainingStatus @default(PENDING)
+  fileUrl   String?
+  issuedAt  DateTime?      @db.Date
+  expiresAt DateTime?      @db.Date
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  deletedAt DateTime?
+
+  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employeeId String?
+
+  @@unique([employeeId, type])
+  @@index([employeeId])
+  @@index([status])
+  @@index([expiresAt])
+}
+
+model PassportEmission {
+  id         String   @id @default(uuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  issuedAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([employeeId])
+  @@index([issuedAt])
+}
+
+model CompanyDocument {
+  id        String              @id @default(uuid())
+  type      CompanyDocumentType
+  status    DocumentStatus      @default(PENDING)
+  fileUrl   String?
+  issuedAt  DateTime?           @db.Date
+  expiresAt DateTime?           @db.Date
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  deletedAt DateTime?
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
+
+  @@unique([companyId, type])
+  @@index([companyId])
+  @@index([status])
+  @@index([expiresAt])
+}

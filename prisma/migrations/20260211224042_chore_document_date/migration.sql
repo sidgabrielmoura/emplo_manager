@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Document" ALTER COLUMN "issuedAt" SET DATA TYPE DATE,
+ALTER COLUMN "expiresAt" SET DATA TYPE DATE;
