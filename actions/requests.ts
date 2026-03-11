@@ -7,7 +7,7 @@ import { usePassportStore } from '@/stores/passport'
 import { useUserStore } from '@/stores/user'
 import axios from 'axios'
 
-const base_url = 'http://localhost:3000/api'
+const base_url = process.env.NEXT_PUBLIC_API_URL
 
 export async function GetCompanies(userId: string) {
     try {
