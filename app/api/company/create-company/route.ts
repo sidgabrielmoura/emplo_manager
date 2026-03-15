@@ -1,7 +1,7 @@
 import db from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcrypt"
-import { isSuperAdmin, unauthorizedResponse, forbiddenResponse } from "@/lib/auth"
+import { isSuperAdmin, forbiddenResponse } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
     try {
@@ -10,6 +10,10 @@ export async function POST(req: NextRequest) {
         }
 
         const body = await req.json()
+
+        if (!body.image_url) {
+            return NextResponse.json({ error: "Imagem da empresa é obrigatória" }, { status: 400 })
+        }
 
         const company = await db.company.create({
             data: {

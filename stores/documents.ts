@@ -10,5 +10,5 @@ type DocumentWithEmployee = Prisma.DocumentGetPayload<{
 
 export const useDocumentStore = proxy({
     dashboard: null as DocumentsDashboard | null,
-    documents: [] as DocumentWithEmployee[]
+    documents: null as DocumentWithEmployee[] | null
 })

@@ -19,7 +19,7 @@ import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
@@ -69,6 +69,7 @@ export default function EmployeeProfilePage() {
   const documents = useSnapshot(useEmployeesStore).employee_documents
   const trainings = useSnapshot(useEmployeesStore).employee_trainings
   const [pageLoading, setPageLoading] = useState(true)
+  const closeUpdateEmployeeSheet = useRef<HTMLButtonElement>(null)
   const [docsLoading, setDocsLoading] = useState(true)
   const [trainingsLoading, setTrainingsLoading] = useState(true)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -117,7 +118,7 @@ export default function EmployeeProfilePage() {
   }, [params.id])
 
   useEffect(() => {
-    if (!employee?.id || documents.length) return
+    if (!employee?.id || documents?.length) return
 
     setForm({
       name: employee.name,
@@ -349,6 +350,7 @@ export default function EmployeeProfilePage() {
       })
 
       toast.success("Funcionário atualizado com sucesso")
+      closeUpdateEmployeeSheet.current?.click()
     } catch (error) {
       console.log(error)
     } finally {
@@ -429,7 +431,7 @@ export default function EmployeeProfilePage() {
                   </Button>
                 </SheetTrigger>
 
-                <SheetContent className="w-full sm:max-w-lg overflow-y-auto px-4">
+                <SheetContent className="w-full sm:max-w-2xl overflow-y-auto px-4">
                   <SheetHeader>
                     <SheetTitle>Atualizar funcionário</SheetTitle>
                   </SheetHeader>
@@ -611,6 +613,8 @@ export default function EmployeeProfilePage() {
                       Salvar alterações {loading && <Loader2 className="animate-spin" />}
                     </Button>
                   </form>
+
+                  <SheetClose ref={closeUpdateEmployeeSheet} />
                 </SheetContent>
               </Sheet>
             </div>
@@ -732,7 +736,7 @@ export default function EmployeeProfilePage() {
                       <Skeleton key={i} className="h-14 w-full rounded-xl" />
                     ))}
                   </div>
-                ) : documents.length ? (
+                ) : documents?.length ? (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
@@ -747,7 +751,7 @@ export default function EmployeeProfilePage() {
                       </TableHeader>
 
                       <TableBody>
-                        {documents.map((doc) => (
+                        {documents?.map((doc) => (
                           <TableRow key={doc.id}>
                             <TableCell className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-primary" />
@@ -822,9 +826,6 @@ export default function EmployeeProfilePage() {
                                     <Button
                                       size="sm"
                                       className="gap-2 cursor-pointer"
-                                      onClick={() => {
-                                        console.log("Enviar documento:", doc.id)
-                                      }}
                                     >
                                       <Upload className="w-4 h-4" />
                                       Enviar
@@ -972,7 +973,7 @@ export default function EmployeeProfilePage() {
                       <Skeleton key={i} className="h-14 w-full rounded-xl" />
                     ))}
                   </div>
-                ) : trainings.length ? (
+                ) : trainings?.length ? (
                   <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>

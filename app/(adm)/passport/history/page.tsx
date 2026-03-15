@@ -24,7 +24,7 @@ export default function PassportHistoryPage() {
         }
     }, [companyStore.company_selected?.id])
 
-    const filteredEmissions = passportStore.emissions.filter(emission =>
+    const filteredEmissions = passportStore.emissions?.filter(emission =>
         emission.employee.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         emission.employee.cpf.includes(searchQuery)
     )
@@ -62,7 +62,7 @@ export default function PassportHistoryPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {filteredEmissions.length === 0 ? (
+                        {filteredEmissions?.length === 0 ? (
                             <div className="py-12 text-center text-muted-foreground">
                                 Nenhuma emissão encontrada.
                             </div>
@@ -79,7 +79,7 @@ export default function PassportHistoryPage() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {filteredEmissions.map((emission) => (
+                                        {filteredEmissions?.map((emission) => (
                                             <TableRow key={emission.id}>
                                                 <TableCell>
                                                     <div className="flex items-center gap-3">

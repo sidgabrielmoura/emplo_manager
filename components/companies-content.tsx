@@ -136,8 +136,8 @@ export function CompaniesContent() {
       setDialogOpen(false)
       fetchCompanies()
       setForm({ name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', image_url: '' })
-    } catch (error) {
-      toast.error("Erro ao criar a empresa.")
+    } catch (error: any) {
+      toast.error(error.response.data.error || "Erro ao criar a empresa.")
     } finally {
       setActionLoading(false)
     }
@@ -428,7 +428,6 @@ export function CompaniesContent() {
         </div>
       </Card>
 
-      {/* Edit Company Dialog */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="max-w-2xl! max-h-[90vh] overflow-y-auto rounded-3xl">
           <DialogHeader>

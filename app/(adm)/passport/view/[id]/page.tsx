@@ -164,7 +164,7 @@ export default function PassportViewPage() {
                                 <div className="col-span-5 p-3 text-right">Vencimento</div>
                             </div>
 
-                            <div className="max-h-[600px] overflow-auto">
+                            <div className="max-h-[600px] overflow-auto print:max-h-none print:overflow-visible">
                                 {monitoringItems.length > 0 ? monitoringItems.map((item, idx) => (
                                     <div key={idx} className="grid grid-cols-12 text-[11px] border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                                         <div className="col-span-7 p-3 flex flex-col gap-1">

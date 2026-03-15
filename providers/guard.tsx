@@ -1,6 +1,6 @@
 "use client"
 
-import { auth, getCompanyData } from "@/actions/requests"
+import { auth, getCompanyData, resetAllCompanyStores } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
 import { useUserStore } from "@/stores/user"
 import { useRouter, usePathname } from "next/navigation"
@@ -32,7 +32,7 @@ export function GuardProvider({ children }: { children: ReactNode }) {
                     }
 
                     if (pathname === "/") {
-                        useCompanyStore.company_selected = null
+                        resetAllCompanyStores()
                     }
 
                     if (!companyId && pathname !== "/" && pathname !== "/onboarding") {

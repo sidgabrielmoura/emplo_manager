@@ -6,7 +6,7 @@ export type PassportWithEmployee = PassportEmission & {
 }
 
 export const usePassportStore = proxy({
-    emissions: [] as PassportWithEmployee[],
+    emissions: null as PassportWithEmployee[] | null,
     loading: false,
     error: null as string | null
 })

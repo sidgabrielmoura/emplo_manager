@@ -188,7 +188,7 @@ model Employee {
   image        String
   cpf          String
   gender       GenderEnum
-  rg           String
+  rg           String?
   position     String
   email        String
   supervisor   String?

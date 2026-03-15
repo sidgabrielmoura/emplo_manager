@@ -17,6 +17,13 @@ export async function POST(req: NextRequest) {
             )
         }
 
+        if (!body.image) {
+            return NextResponse.json(
+                { error: "Imagem do funcionário ausente" },
+                { status: 400 }
+            )
+        }
+
         const hasAccess = await validateCompanyAccess(userId, body.companyId)
         if (!hasAccess) return forbiddenResponse()
 

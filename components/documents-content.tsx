@@ -1,20 +1,34 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { StatusBadge } from "@/components/status-badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Search, Eye, FileText, CheckCircle2, AlertCircle, Clock, BarChart3 } from "lucide-react"
-import { getDocsDashboard, getDocuments } from "@/actions/requests"
+import { Search, Eye, FileText, CheckCircle2, AlertCircle, Clock, BarChart3, Upload, Loader2 } from "lucide-react"
+import { getDocsDashboard, getDocuments, updateEmployeeDocument, uploadImage } from "@/actions/requests"
 import { useSnapshot } from "valtio"
 import { useCompanyStore } from "@/stores/company"
 import { useDocumentStore } from "@/stores/documents"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table"
 import { Badge } from "./ui/badge"
-import { Label } from "./ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
+import Link from "next/link"
+import { Dialog, DialogClose, DialogContent, DialogTrigger } from "./ui/dialog"
+import { toast } from "sonner"
+import { Switch } from "./ui/switch"
+
+const allowedTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "image/png",
+  "image/jpeg",
+]
 
 export function DocumentsContent() {
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -22,6 +36,14 @@ export function DocumentsContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const useCompany = useSnapshot(useCompanyStore)
   const documentStore = useSnapshot(useDocumentStore)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null)
+  const [preview, setPreview] = useState<string | null>(null)
+  const [issuedAt, setIssuedAt] = useState<string>("")
+  const [expire, setExpire] = useState<boolean>(false)
+  const [expireAt, setExpireAt] = useState<string>("")
+  const [loading, setLoading] = useState(false)
+  const closeEditDocModal = useRef<HTMLButtonElement>(null)
 
   const now = new Date()
 
@@ -43,7 +65,7 @@ export function DocumentsContent() {
     return docs[type] || type || "Documento não informado"
   }
 
-  const documentsWithDays = documentStore.documents.map(doc => {
+  const documentsWithDays = documentStore.documents?.map(doc => {
     const expiresAt = new Date(doc.expiresAt || '')
     const diffTime = expiresAt.getTime() - now.getTime()
     const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
@@ -54,7 +76,65 @@ export function DocumentsContent() {
     }
   })
 
-  const filteredDocuments = documentsWithDays.filter((doc) => {
+  function handleSelect(fileList?: FileList | null) {
+    if (!fileList?.[0]) return
+
+    const selected = fileList[0]
+
+    if (!allowedTypes.includes(selected.type)) {
+      toast.error("Formato de arquivo não permitido")
+      return
+    }
+
+    setFile(selected)
+    setPreview(URL.createObjectURL(selected))
+  }
+
+  const handleUploadImage = async (id: string, employeeId: string) => {
+    if (!issuedAt) {
+      toast.error("Informe a data de emissão")
+      return
+    }
+
+    if (!expireAt && expire) {
+      toast.error("Informe a data de vencimento")
+      return
+    }
+
+    setLoading(true)
+    try {
+      const uploaded: any = await uploadImage(file!).catch(() => {
+        toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+        return null
+      })
+
+      if (!uploaded) {
+        setLoading(false)
+        return
+      }
+
+      const response = await updateEmployeeDocument({
+        expiresAt: expireAt,
+        issuedAt: issuedAt,
+        fileUrl: uploaded.url,
+        id,
+      }, employeeId)
+
+      if (response) {
+        getDocsDashboard(useCompany.company_selected?.id || '')
+        getDocuments(useCompany.company_selected?.id || '')
+        toast.success('arquivos enviados com sucesso')
+        closeEditDocModal.current?.click()
+      }
+
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro no upload")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredDocuments = documentsWithDays?.filter((doc) => {
     const matchesStatus = statusFilter === "all" || doc.status === statusFilter
     const matchesExpiration =
       expirationFilter === "all" ||
@@ -171,7 +251,7 @@ export function DocumentsContent() {
                       <TableCell className="px-6 py-4"><Skeleton className="h-8 w-8 rounded-lg ml-auto" /></TableCell>
                     </TableRow>
                   ))
-                ) : filteredDocuments.length === 0 ? (
+                ) : filteredDocuments?.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center py-20">
                       <div className="flex flex-col items-center">
@@ -181,7 +261,7 @@ export function DocumentsContent() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredDocuments.map((doc) => (
+                  filteredDocuments?.map((doc) => (
                     <TableRow key={doc.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
                       <TableCell className="px-6 py-4 font-bold text-slate-700">
                         <div className="flex items-center gap-3">
@@ -207,11 +287,132 @@ export function DocumentsContent() {
                       <TableCell className="px-6 py-4 text-center font-bold text-slate-500 tabular-nums">
                         {doc.expiresAt ? new Date(doc.expiresAt).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "---"}
                       </TableCell>
-                      <TableCell className="px-6 py-4 text-right">
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
-                          <Eye className="w-4 h-4" />
-                        </Button>
-                      </TableCell>
+                      {doc.status !== "PENDING" ? (
+                        <TableCell className="px-6 py-4 text-right">
+                          <Link href={doc.fileUrl || ''} target="_blank">
+                            <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
+                              <Eye className="size-4" />
+                            </Button>
+                          </Link>
+                        </TableCell>
+                      ) : (
+                        <>
+                          <TableCell className="px-6 py-4 text-right">
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
+                                  <Upload className="size-4" />
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent className="max-w-2xl! w-full">
+                                <div className="space-y-5">
+                                  <h3 className="text-lg font-semibold">Enviar documento</h3>
+
+                                  <input
+                                    ref={inputRef}
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                    hidden
+                                    onChange={(e) => handleSelect(e.target.files)}
+                                  />
+
+                                  <div className="flex flex-col gap-2">
+                                    <Button
+                                      variant="outline"
+                                      className="w-fit cursor-pointer"
+                                      onClick={() => inputRef.current?.click()}
+                                    >
+                                      Selecionar arquivo
+                                    </Button>
+
+                                    <p className="text-xs text-muted-foreground">
+                                      Formatos aceitos: PDF, Word, Excel e PowerPoint
+                                    </p>
+                                  </div>
+
+                                  {preview && file && (
+                                    <div className="flex items-center justify-between gap-3 rounded-md border p-2">
+                                      <a
+                                        href={preview}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="text-primary line-clamp-1 underline underline-offset-4 hover:opacity-80"
+                                      >
+                                        {file.name}
+                                      </a>
+
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="cursor-pointer text-destructive"
+                                        onClick={() => {
+                                          setFile(null)
+                                          setPreview(null)
+                                        }}
+                                      >
+                                        Remover
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  <section>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                      <div className="space-y-1">
+                                        <label className="text-sm font-medium">Data de emissão</label>
+                                        <Input
+                                          type="date"
+                                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                          onChange={(e) => setIssuedAt(e.target.value)}
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <label className="text-sm font-medium">Data de vencimento</label>
+                                        <Input
+                                          disabled={!expire}
+                                          type="date"
+                                          className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                          onChange={(e) => setExpireAt(e.target.value)}
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 mt-5 justify-end">
+                                      <p className="text-sm text-muted-foreground">Este documento tem validade?</p>
+                                      <Switch onCheckedChange={(value) => setExpire(value)} checked={expire} className="cursor-pointer" />
+                                    </div>
+                                  </section>
+
+                                  <div className="flex justify-end gap-2 pt-2">
+                                    <Button
+                                      variant="secondary"
+                                      className="cursor-pointer"
+                                      onClick={() => {
+                                        setFile(null)
+                                        setPreview(null)
+                                        setIssuedAt("")
+                                        setExpireAt("")
+                                      }}
+                                    >
+                                      Limpar
+                                    </Button>
+
+                                    <Button
+                                      className="cursor-pointer gap-2"
+                                      disabled={!file || loading}
+                                      onClick={() => handleUploadImage(doc.id, doc.employeeId || '')}
+                                    >
+                                      Enviar documento
+                                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                    </Button>
+                                    <DialogClose ref={closeEditDocModal} />
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          </TableCell>
+                        </>
+                      )}
                     </TableRow>
                   ))
                 )}

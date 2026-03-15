@@ -12,8 +12,8 @@ type EmployeeWithComplements = Prisma.EmployeeGetPayload<{
 }>
 
 export const useEmployeesStore = proxy({
-    employees: [] as Employee[],
-    employee_documents: [] as Document[],
-    employee_trainings: [] as Training[],
+    employees: null as Employee[] | null,
+    employee_documents: null as Document[] | null,
+    employee_trainings: null as Training[] | null,
     show_employee: null as EmployeeWithComplements | null,
 })

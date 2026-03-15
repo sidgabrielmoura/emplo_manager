@@ -8,6 +8,6 @@ export type UserWithPreferences = PrismaUser & {
 export const useUserStore = proxy({
     user_token: null as string | null,
     user: null as UserWithPreferences | null,
-    all_users: [] as UserWithPreferences[],
+    all_users: null as UserWithPreferences[] | null,
     superadmin: false as boolean
 })

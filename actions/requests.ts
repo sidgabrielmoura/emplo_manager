@@ -1,4 +1,3 @@
-import { DocumentType, TrainingType } from '@/lib/generated/prisma/enums'
 import { useCompanyStore } from '@/stores/company'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useDocumentStore } from '@/stores/documents'
@@ -8,6 +7,18 @@ import { useUserStore } from '@/stores/user'
 import axios from 'axios'
 
 const base_url = process.env.NEXT_PUBLIC_API_URL
+
+export function resetAllCompanyStores() {
+    useCompanyStore.company_selected = null
+    useDashboardStore.dashboard = null
+    useDocumentStore.dashboard = null
+    useDocumentStore.documents = null
+    useEmployeesStore.employees = null
+    useEmployeesStore.employee_documents = null
+    useEmployeesStore.employee_trainings = null
+    useEmployeesStore.show_employee = null
+    usePassportStore.emissions = null
+}
 
 export async function GetCompanies(userId: string) {
     try {
@@ -177,6 +188,7 @@ export async function updateCompanyDocument(payload: {
 
 export async function getDashboardData(company_id: string) {
     try {
+        useDashboardStore.dashboard = null
         const { data } = await axios.post(
             '/dashboard',
             { company_id },
@@ -238,6 +250,7 @@ export async function createEmployee(payload: CreateEmployeePayload) {
 
 export async function getDocsDashboard(company_id: string) {
     try {
+        useDocumentStore.dashboard = null
         const { data } = await axios.post(
             '/documents/dashboard',
             { company_id },
@@ -257,6 +270,7 @@ export async function getDocsDashboard(company_id: string) {
 
 export async function getDocuments(company_id: string) {
     try {
+        useDocumentStore.documents = null
         const { data } = await axios.post(
             '/documents/get-documents',
             { company_id },
@@ -276,6 +290,7 @@ export async function getDocuments(company_id: string) {
 
 export async function getEmployees(company_id: string) {
     try {
+        useEmployeesStore.employees = null
         const { data } = await axios.post(
             '/employees/get-employees',
             { companyId: company_id },
@@ -295,6 +310,7 @@ export async function getEmployees(company_id: string) {
 
 export async function getAllUsers(company_id: string) {
     try {
+        useUserStore.all_users = null
         const { data } = await axios.post(
             '/user/get-users',
             { company_id },
@@ -618,6 +634,7 @@ export async function emitPassport(employeeId: string) {
 
 export async function getPassportHistory(companyId: string) {
     try {
+        usePassportStore.emissions = null
         const { data } = await axios.post(
             '/passport/history',
             { companyId },

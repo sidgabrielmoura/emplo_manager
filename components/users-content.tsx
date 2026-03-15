@@ -45,7 +45,7 @@ export function UsersContent() {
   const [currentPassword, setCurrentPassword] = useState("")
   const closeModal = useRef<HTMLButtonElement>(null)
 
-  const filteredUsers = all_users.filter((user) => {
+  const filteredUsers = all_users?.filter((user) => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       user.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -54,7 +54,7 @@ export function UsersContent() {
   })
 
   useEffect(() => {
-    if (!all_users.length) {
+    if (!all_users?.length) {
       getAllUsers(company.company_selected?.id || '')
     }
   }, [company.company_selected?.id])
@@ -215,14 +215,14 @@ export function UsersContent() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filteredUsers.length === 0 ? (
+        {filteredUsers?.length === 0 ? (
           <Card className="col-span-full">
             <CardContent className="p-12 text-center">
               <p className="text-muted-foreground">Sem usuários encontrados</p>
             </CardContent>
           </Card>
         ) : (
-          filteredUsers.map((user_list) => (
+          filteredUsers?.map((user_list) => (
             <Card key={user_list.id} className="p-0">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">

@@ -117,6 +117,30 @@ export default function CreateEmployeeComponent() {
     setPhotoFile(file)
   }
 
+  function resetForm() {
+    setPhoto(undefined)
+    setPhotoFile(null)
+    setName("")
+    setEmail("")
+    setCpf("")
+    setRg("")
+    setPosition("")
+    setGender("")
+    setRotation("")
+    setBirthDate("")
+    setContact("")
+    setEmergencyContact("")
+    setAdmissionDate("")
+    setContractEndDate("")
+    setIsTemporaryContract(false)
+    setCep("")
+    setAddress("")
+    setNumber("")
+    setCity("")
+    setDistrict("")
+    setComplement("")
+  }
+
   async function handleCreateEmployee() {
     try {
       setLoading(true)
@@ -152,6 +176,7 @@ export default function CreateEmployeeComponent() {
       })
 
       toast.success("Funcionário criado!")
+      resetForm()
     } catch (error: any) {
       toast.error(error.response.data.error)
     } finally {
@@ -190,8 +215,8 @@ export default function CreateEmployeeComponent() {
 
       <Separator />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 flex flex-col gap-6">
+      <div className="w-full gap-6">
+        <div className="flex flex-col gap-6 w-full">
           <Card>
             <CardHeader>
               <CardTitle>Dados pessoais</CardTitle>
@@ -217,7 +242,7 @@ export default function CreateEmployeeComponent() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>RG</Label>
+                  <Label>RG <p className="text-xs text-muted-foreground">(opcional)</p></Label>
                   <Input value={rg} onChange={(e) => setRg(maskRG(e.target.value))} />
                 </div>
 
@@ -228,7 +253,7 @@ export default function CreateEmployeeComponent() {
 
                 <div className="space-y-1">
                   <Label>Gênero</Label>
-                  <Select onValueChange={(v) => setGender(v as any)}>
+                  <Select value={gender} onValueChange={(v) => setGender(v as any)}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MALE">Homem</SelectItem>
@@ -239,7 +264,7 @@ export default function CreateEmployeeComponent() {
 
                 <div className="space-y-1">
                   <Label>Turno</Label>
-                  <Select onValueChange={(v) => setRotation(v as any)}>
+                  <Select value={rotation} onValueChange={(v) => setRotation(v as any)}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="MORNING">Manhã</SelectItem>
@@ -307,54 +332,54 @@ export default function CreateEmployeeComponent() {
 
             </CardContent>
           </Card>
-        </div>
 
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Endereço</CardTitle>
-            </CardHeader>
+          <div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Endereço</CardTitle>
+              </CardHeader>
 
-            <CardContent className="space-y-4">
+              <CardContent className="space-y-4">
 
-              <Input
-                placeholder="CEP"
-                value={cep}
-                onChange={(e) => setCep(e.target.value)}
-              />
+                <Input
+                  placeholder="CEP"
+                  value={cep}
+                  onChange={(e) => setCep(e.target.value)}
+                />
 
-              <Input
-                placeholder="Endereço"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
+                <Input
+                  placeholder="Endereço"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                />
 
-              <Input
-                placeholder="Número"
-                value={number}
-                onChange={(e) => setNumber(e.target.value)}
-              />
+                <Input
+                  placeholder="Número"
+                  value={number}
+                  onChange={(e) => setNumber(e.target.value)}
+                />
 
-              <Input
-                placeholder="Cidade"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-              />
+                <Input
+                  placeholder="Cidade"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                />
 
-              <Input
-                placeholder="Bairro"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-              />
+                <Input
+                  placeholder="Bairro"
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                />
 
-              <Input
-                placeholder="Complemento"
-                value={complement}
-                onChange={(e) => setComplement(e.target.value)}
-              />
+                <Input
+                  placeholder="Complemento"
+                  value={complement}
+                  onChange={(e) => setComplement(e.target.value)}
+                />
 
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </main>
