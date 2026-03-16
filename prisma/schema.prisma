@@ -139,7 +139,7 @@ model User {
   password  String
   role      Role
   companyId String?
-  company   Company? @relation(fields: [companyId], references: [id])
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
@@ -152,7 +152,7 @@ model User {
 model NotificationPreferences {
   id                       String   @id @default(uuid())
   userId                   String   @unique
-  user                     User     @relation(fields: [userId], references: [id])
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   documentExpirationAlerts Boolean  @default(true)
   newEmployeeAlerts        Boolean  @default(true)
   email                    String?
@@ -183,7 +183,7 @@ model Company {
 model Employee {
   id           String           @id @default(uuid())
   companyId    String
-  company      Company          @relation(fields: [companyId], references: [id])
+  company      Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name         String
   image        String
   cpf          String
@@ -246,7 +246,7 @@ model EmployeeAddress {
 model Contract {
   id         String         @id @default(uuid())
   employeeId String         @unique
-  employee   Employee       @relation(fields: [employeeId], references: [id])
+  employee   Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   startDate  DateTime
   endDate    DateTime?
   status     ContractStatus @default(ACTIVE)
@@ -266,7 +266,7 @@ model Document {
   updatedAt DateTime       @updatedAt
   deletedAt DateTime?
 
-  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   employeeId String?
 
   @@unique([employeeId, type])
@@ -286,7 +286,7 @@ model Training {
   updatedAt DateTime       @updatedAt
   deletedAt DateTime?
 
-  employee   Employee? @relation(fields: [employeeId], references: [id])
+  employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   employeeId String?
 
   @@unique([employeeId, type])
@@ -298,7 +298,7 @@ model Training {
 model PassportEmission {
   id         String   @id @default(uuid())
   employeeId String
-  employee   Employee @relation(fields: [employeeId], references: [id])
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   issuedAt   DateTime @default(now())
 
   createdAt DateTime @default(now())
@@ -319,7 +319,7 @@ model CompanyDocument {
   updatedAt DateTime            @updatedAt
   deletedAt DateTime?
 
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String
 
   @@unique([companyId, type])

@@ -204,7 +204,7 @@ export function DocumentsContent() {
                   <SelectItem value="all">Todos os Status</SelectItem>
                   <SelectItem value="APPROVED" className="text-emerald-600">Aprovados</SelectItem>
                   <SelectItem value="PENDING" className="text-amber-600">Pendentes</SelectItem>
-                  <SelectItem value="REJECTED" className="text-red-600">Rejeitados</SelectItem>
+                  <SelectItem value="REJECTED" className="text-red-600">Expirados</SelectItem>
                 </SelectContent>
               </Select>
 

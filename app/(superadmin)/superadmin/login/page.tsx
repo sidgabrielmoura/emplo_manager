@@ -55,7 +55,7 @@ export default function SuperAdminLoginPage() {
                     <div className="space-y-6">
                         <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 rounded-full border border-emerald-500/20 mb-4">
                             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                            <span className="text-xs font-black text-emerald-400 uppercase tracking-[0.3em]">Master Access Only</span>
+                            <span className="text-xs font-black text-emerald-400 uppercase tracking-[0.3em]">Acesso Master</span>
                         </div>
                         <h1 className="text-6xl font-black text-white leading-tight tracking-tighter">
                             Controle <span className="text-emerald-500">Global.</span><br />
@@ -68,7 +68,7 @@ export default function SuperAdminLoginPage() {
 
                     <div className="mt-20 flex items-center gap-4 text-emerald-500/30 font-black uppercase tracking-[0.4em] text-[10px]">
                         <div className="w-16 h-1 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)] rounded-full" />
-                        <span>Security Protocol Alpha v4.2</span>
+                        <span>Versão do sistema v1.0.0</span>
                     </div>
                 </div>
             </div>
@@ -150,7 +150,7 @@ export default function SuperAdminLoginPage() {
                     </form>
 
                     <div className="mt-12 text-center pt-8 border-t border-slate-50">
-                        <p className="text-slate-300 text-[10px] font-black uppercase tracking-[0.4em] italic">Secure Environment • Encrypted Connection</p>
+                        <p className="text-slate-300 text-[10px] font-black uppercase tracking-[0.4em] italic">Ambiente Seguro • Conexão Criptografada</p>
                     </div>
                 </div>
             </div>
