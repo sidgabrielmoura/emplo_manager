@@ -9,7 +9,7 @@ const adminNavigation = [
   { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
   { name: "Funcionários", href: "/employees", icon: Users },
   { name: "Documentos", href: "/documents", icon: FileText },
-  { name: "Emitir passaporte", href: "/passport", icon: Book },
+  { name: "Perfil de qualificação", href: "/passport", icon: Book },
   { name: "Usuários e Funções", href: "/users", icon: UserCog },
   { name: "Configurações", href: "/settings", icon: Settings },
 ]
@@ -32,8 +32,8 @@ export function AppSidebar({ onNavItemClick }: AppSidebarProps) {
 
   return (
     <aside className="w-64 h-full border-r border-slate-200 bg-white flex flex-col items-center shadow-sm">
-      <div className="p-6 border-b border-slate-50 flex items-center h-16 shrink-0 w-full">
-        <Image src="/ETX-GESTAO-4.png" alt="ETX GESTÃO" width={160} height={40} className="w-auto h-8" />
+      <div className="p-6 border-b border-slate-50 flex items-center shrink-0 w-full">
+        <Image src="/ETX-GESTAO-4.png" alt="ETX GESTÃO" width={160} height={40} className="w-auto h-12" />
       </div>
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto w-full">
         {navigation.map((item) => {

@@ -24,9 +24,9 @@ export async function GET(req: NextRequest) {
             pendingDocs,
             expiredDocs
         ] = await Promise.all([
-            db.document.count({ where: { status: "APPROVED" } }),
-            db.document.count({ where: { status: "PENDING" } }),
-            db.document.count({ where: { status: "EXPIRED" } })
+            db.document.count({ where: { status: "APPROVED", deletedAt: null } }),
+            db.document.count({ where: { status: "PENDING", deletedAt: null } }),
+            db.document.count({ where: { status: "EXPIRED", deletedAt: null } })
         ])
 
         const recentCompanies = await db.company.findMany({

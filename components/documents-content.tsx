@@ -47,7 +47,8 @@ export function DocumentsContent() {
 
   const now = new Date()
 
-  const translateDocumentName = (type: string) => {
+  const translateDocumentName = (type: string, name?: string) => {
+    if (type === "CUSTOM" && name) return name
     const docs: Record<string, string> = {
       ASO: "ASO – Atestado de Saúde Ocupacional",
       RG_CNH: "RG / CNH",
@@ -142,7 +143,7 @@ export function DocumentsContent() {
       (expirationFilter === "expired" && doc.daysRemaining < 0)
 
     const matchesSearch =
-      translateDocumentName(doc.type).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      translateDocumentName(doc.type, doc.name).toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.employee?.name.toLowerCase().includes(searchQuery.toLowerCase())
 
     return matchesStatus && matchesExpiration && matchesSearch
@@ -268,7 +269,7 @@ export function DocumentsContent() {
                           <div className="p-2 rounded-lg bg-slate-50 text-slate-400 group-hover:text-emerald-600 transition-colors">
                             <FileText className="w-4 h-4" />
                           </div>
-                          {translateDocumentName(doc.type)}
+                          {translateDocumentName(doc.type, doc.name)}
                         </div>
                       </TableCell>
                       <TableCell className="px-6 py-4 text-center font-semibold text-slate-500">{doc.employee?.name}</TableCell>

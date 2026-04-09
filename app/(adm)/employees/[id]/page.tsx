@@ -1,5 +1,7 @@
 "use client"
 
+import { getDaysRemaining } from "@/lib/utils"
+
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,46 +24,7 @@ import { Input } from "@/components/ui/input"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-const DOCUMENTS_PT_BR: Record<string, string> = {
-  ASO: "Atestado de Saúde Ocupacional",
-  RG_CNH: "RG ou CNH",
-  CTPS_ESOCIAL: "Carteira de Trabalho (CTPS) / eSocial",
-  OS_NR01: "Ordem de Serviço - NR 01",
-  VACCINE_CARD: "Carteira de Vacinação",
-  LIFE_INSURANCE_208: "Seguro de Vida (NR-01 / 208)",
-  REGISTRATION_FORM: "Ficha de Registro do Funcionário",
-  NR01_TRAINING: "Treinamento NR-01",
-  NR06_EPI_TRAINING: "Treinamento de EPI - NR-06",
-  FIRST_AID_TRAINING_208: "Treinamento de Primeiros Socorros (208)",
-  EPI_FORM_208: "Ficha de EPI (208)",
-  FIRE_FIGHTING_TRAINING_208: "Treinamento de Combate a Incêndio (208)",
-}
-
-const TRAININGS_PT_BR: Record<string, string> = {
-  NR10_SEGURANCA_ELETRICIDADE_40H: "NR-10 Segurança em Eletricidade 40 Horas",
-  NR10_SEP_SISTEMA_ELETRICO_POTENCIA: "NR-10 SEP Sistema Elétrico de Potência",
-  CARTA_ANUENCIA_SEP_208: "Carta de anuência SEP - 208",
-  CNH_CARTEIRA_NACIONAL_HABILITACAO: "CNH - Carteira Nacional de Habilitação",
-  TREINAMENTO_DIRECAO_DEFENSIVA_208: "Treinamento de direção defensiva - 208",
-  CURSO_MANUSEIO_EMERGENCIAS_QUIMICAS: "Curso para manuseio e atendimento a emergências químicas",
-  CARTA_ANUENCIA_NR12_208: "Carta de anuência NR-12 - 208",
-  NR12_OPERACAO_MANUTENCAO_MAQUINAS_EQUIPAMENTOS_208: "NR-12 Operação e manutenção de máquinas e equipamentos - 208",
-  NR35_TRABALHO_ALTURA_RESGATE_AEROGERADORES_16H: "NR-35 Trabalho em altura + Resgate em Aerogeradores (Carga horaria 16h)",
-  CARTA_ANUENCIA_NR35_208: "Carta de anuência NR-35 - 208",
-  NR11_TALHA_ELETRICA_208: "NR-11 Talha elétrica - 208",
-  COMPROVANTE_QUALIFICACAO: "Comprovante de qualificação (Registro do conselho de classe e ou certificados)",
-  GWO_CERTIFICADO_TREINAMENTO_WINDA_208: "GWO - Certificado de Treinamento WINDA - 208",
-  GWO_BST_TRABALHO_RESGATE_ALTURA_16H_208: "GWO - BST - Trabalho e Resgate em Altura - (16h) - 208",
-  GWO_BST_PRIMEIROS_SOCORROS_208: "GWO - BST Primeiros Socorros - 208",
-  GWO_BST_MANUSEIO_MANUAL_208: "GWO - BST - Manuseio Manual - 208",
-  GWO_BST_COMBATE_INCENDIO_208: "GWO - BST - Combate a Incêndio - 208",
-  ADVANCED_RESCUE_TRAINING_ART: "Advanced Rescue Training (ART)",
-}
-
-const getPTBRDocuments = (type: string) => {
-  return DOCUMENTS_PT_BR[type] || TRAININGS_PT_BR[type] || type.replaceAll("_", " ")
-}
+import { getPTBRDocuments } from "@/lib/constants/documents"
 
 export default function EmployeeProfilePage() {
   const employee = useSnapshot(useEmployeesStore).show_employee
@@ -75,9 +38,6 @@ export default function EmployeeProfilePage() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
-  const [expire, setExpire] = useState<boolean>(false)
-  const [issuedAt, setIssuedAt] = useState<string>("")
-  const [expireAt, setExpireAt] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const closeEditDocModal = useRef<HTMLButtonElement>(null)
   const [imageFile, setImageFile] = useState<File | null>(null)
@@ -105,6 +65,8 @@ export default function EmployeeProfilePage() {
     emergencyContact: '',
     dismissedAt: ''
   })
+  const [docIssuedAt, setDocIssuedAt] = useState('')
+  const [docExpiresAt, setDocExpiresAt] = useState('')
 
   useEffect(() => {
     if (!params.id) return
@@ -239,15 +201,6 @@ export default function EmployeeProfilePage() {
   }
 
   const handleUploadImage = async (id: string) => {
-    if (!issuedAt) {
-      toast.error("Informe a data de emissão")
-      return
-    }
-
-    if (!expireAt && expire) {
-      toast.error("Informe a data de vencimento")
-      return
-    }
 
     setLoading(true)
     try {
@@ -262,10 +215,10 @@ export default function EmployeeProfilePage() {
       }
 
       const response = await updateEmployeeDocument({
-        expiresAt: expireAt,
-        issuedAt: issuedAt,
         fileUrl: uploaded.url,
         id,
+        issuedAt: docIssuedAt || undefined,
+        expiresAt: docExpiresAt || undefined,
       }, employee.id)
 
       if (response) {
@@ -281,15 +234,6 @@ export default function EmployeeProfilePage() {
   }
 
   const handleUploadTraining = async (id: string) => {
-    if (!issuedAt) {
-      toast.error("Informe a data de realização")
-      return
-    }
-
-    if (!expireAt && expire) {
-      toast.error("Informe a data de vencimento")
-      return
-    }
 
     setLoading(true)
     try {
@@ -304,8 +248,6 @@ export default function EmployeeProfilePage() {
       }
 
       const response = await updateTraining({
-        expiresAt: expireAt,
-        issuedAt: issuedAt,
         fileUrl: uploaded.url,
         id,
       }, employee.id)
@@ -744,7 +686,7 @@ export default function EmployeeProfilePage() {
                           <TableHead>Documento</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de emissão</TableHead>
-                          <TableHead className="w-40! text-center">Data do vencimento</TableHead>
+                          <TableHead className="w-40! text-center">Data de vencimento</TableHead>
                           <TableHead className="w-40! text-center">Última atualização</TableHead>
                           <TableHead className="text-right">Ação</TableHead>
                         </TableRow>
@@ -755,7 +697,7 @@ export default function EmployeeProfilePage() {
                           <TableRow key={doc.id}>
                             <TableCell className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-primary" />
-                              {getPTBRDocuments(doc.type)}
+                              {getPTBRDocuments(doc.type, doc.name)}
                             </TableCell>
 
                             <TableCell className="text-center">
@@ -843,6 +785,24 @@ export default function EmployeeProfilePage() {
                                         onChange={(e) => handleSelect(e.target.files)}
                                       />
 
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                          <Label>Data de emissão</Label>
+                                          <Input
+                                            type="date"
+                                            value={docIssuedAt}
+                                            onChange={e => setDocIssuedAt(e.target.value)}
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Data de vencimento</Label>
+                                          <Input
+                                            type="date"
+                                            value={docExpiresAt}
+                                            onChange={e => setDocExpiresAt(e.target.value)}
+                                          />
+                                        </div>
+                                      </div>
                                       <div className="flex flex-col gap-2">
                                         <Button
                                           variant="outline"
@@ -882,33 +842,6 @@ export default function EmployeeProfilePage() {
                                         </div>
                                       )}
 
-                                      <section>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de emissão</label>
-                                            <Input
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setIssuedAt(e.target.value)}
-                                            />
-                                          </div>
-
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de vencimento</label>
-                                            <Input
-                                              disabled={!expire}
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setExpireAt(e.target.value)}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-3 mt-5 justify-end">
-                                          <p className="text-sm text-muted-foreground">Este documento tem validade?</p>
-                                          <Switch onCheckedChange={(value) => setExpire(value)} checked={expire} className="cursor-pointer" />
-                                        </div>
-                                      </section>
 
                                       <div className="flex justify-end gap-2 pt-2">
                                         <Button
@@ -917,8 +850,6 @@ export default function EmployeeProfilePage() {
                                           onClick={() => {
                                             setFile(null)
                                             setPreview(null)
-                                            setIssuedAt("")
-                                            setExpireAt("")
                                           }}
                                         >
                                           Limpar
@@ -981,7 +912,7 @@ export default function EmployeeProfilePage() {
                           <TableHead>Treinamento</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de realização</TableHead>
-                          <TableHead className="w-40! text-center">Data do vencimento</TableHead>
+                          <TableHead className="w-40! text-center">Dias para vencer</TableHead>
                           <TableHead className="w-40! text-center">Última atualização</TableHead>
                           <TableHead className="text-right">Ação</TableHead>
                         </TableRow>
@@ -1025,14 +956,7 @@ export default function EmployeeProfilePage() {
                             </TableCell>
 
                             <TableCell className="text-center">
-                              {training.expiresAt
-                                ? new Date(training.expiresAt).toLocaleDateString("pt-BR", {
-                                  timeZone: 'UTC',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
+                              {training.expiresAt ? getDaysRemaining(training.expiresAt) : "—"}
                             </TableCell>
 
                             <TableCell className="text-center">
@@ -1107,38 +1031,9 @@ export default function EmployeeProfilePage() {
                                           </div>
                                         )}
 
-                                        <section>
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                              <label className="text-sm font-medium">Data de realização</label>
-                                              <Input
-                                                type="date"
-                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                                defaultValue={training.issuedAt ? new Date(training.issuedAt).toISOString().split('T')[0] : ''}
-                                                onChange={(e) => setIssuedAt(e.target.value)}
-                                              />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                              <label className="text-sm font-medium">Data de vencimento</label>
-                                              <Input
-                                                disabled={!expire}
-                                                type="date"
-                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                                defaultValue={training.expiresAt ? new Date(training.expiresAt).toISOString().split('T')[0] : ''}
-                                                onChange={(e) => setExpireAt(e.target.value)}
-                                              />
-                                            </div>
-                                          </div>
-
-                                          <div className="flex items-center gap-3 mt-5 justify-end">
-                                            <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
-                                            <Switch onCheckedChange={(value) => setExpire(value)} checked={expire} className="cursor-pointer" />
-                                          </div>
-                                        </section>
 
                                         <div className="flex justify-end gap-2 pt-2">
-                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setIssuedAt(""); setExpireAt("") }}>Limpar</Button>
+                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); }}>Limpar</Button>
                                           <Button
                                             className="cursor-pointer gap-2"
                                             disabled={loading}
@@ -1207,33 +1102,6 @@ export default function EmployeeProfilePage() {
                                         </div>
                                       )}
 
-                                      <section>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de realização</label>
-                                            <Input
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setIssuedAt(e.target.value)}
-                                            />
-                                          </div>
-
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de vencimento</label>
-                                            <Input
-                                              disabled={!expire}
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setExpireAt(e.target.value)}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        <div className="flex items-center gap-3 mt-5 justify-end">
-                                          <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
-                                          <Switch onCheckedChange={(value) => setExpire(value)} checked={expire} className="cursor-pointer" />
-                                        </div>
-                                      </section>
 
                                       <div className="flex justify-end gap-2 pt-2">
                                         <Button
@@ -1242,8 +1110,6 @@ export default function EmployeeProfilePage() {
                                           onClick={() => {
                                             setFile(null)
                                             setPreview(null)
-                                            setIssuedAt("")
-                                            setExpireAt("")
                                           }}
                                         >
                                           Limpar

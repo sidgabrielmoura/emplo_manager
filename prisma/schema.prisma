@@ -50,6 +50,7 @@ enum DocumentType {
   FIRST_AID_TRAINING_208
   EPI_FORM_208
   FIRE_FIGHTING_TRAINING_208
+  CUSTOM
 }
 
 enum GenderEnum {
@@ -89,6 +90,7 @@ enum TrainingType {
   GWO_BST_MANUSEIO_MANUAL_208
   GWO_BST_COMBATE_INCENDIO_208
   ADVANCED_RESCUE_TRAINING_ART
+  CUSTOM
 }
 
 enum CompanyDocumentType {
@@ -120,16 +122,18 @@ enum CompanyDocumentType {
   RECIBO_FERIAS_PAGAMENTO
   CND_DEBITOS_TRABALHISTAS
   GUIA_DAS_PAGAMENTO
+  CUSTOM
 }
 
 model Superadmin {
-  id        String   @id @default(uuid())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(SUPERADMIN)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  id                      String                   @id @default(uuid())
+  name                    String
+  email                   String                   @unique
+  password                String
+  role                    Role                     @default(SUPERADMIN)
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @default(now())
+  notificationPreferences NotificationPreferences?
 }
 
 model User {
@@ -150,34 +154,40 @@ model User {
 }
 
 model NotificationPreferences {
-  id                       String   @id @default(uuid())
-  userId                   String   @unique
-  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  documentExpirationAlerts Boolean  @default(true)
-  newEmployeeAlerts        Boolean  @default(true)
+  id                       String      @id @default(uuid())
+  userId                   String?     @unique
+  user                     User?       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  superadminId             String?     @unique
+  superadmin               Superadmin? @relation(fields: [superadminId], references: [id], onDelete: Cascade)
+  documentExpirationAlerts Boolean     @default(true)
+  newEmployeeAlerts        Boolean     @default(true)
   email                    String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
 }
 
 model Company {
-  id          String            @id @default(uuid())
-  name        String
-  imageUrl    String
-  cnpj        String?
-  email       String?
-  phone       String?
-  address     String?
-  state       String?
-  city        String?
-  responsible String?
-  status      CompanyStatus     @default(ACTIVE)
-  users       User[]
-  employees   Employee[]
-  documents   CompanyDocument[]
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  deletedAt   DateTime?
+  id                       String                    @id @default(uuid())
+  name                     String
+  imageUrl                 String
+  cnpj                     String?
+  email                    String?
+  phone                    String?
+  address                  String?
+  state                    String?
+  city                     String?
+  responsible              String?
+  status                   CompanyStatus             @default(ACTIVE)
+  users                    User[]
+  employees                Employee[]
+  documents                CompanyDocument[]
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  deletedAt                DateTime?
+  companyRequiredDocuments CompanyRequiredDocument[]
+  disabledDocuments        String[]                  @default([])
+  standardDocumentValidity Json?
+  standardDocumentLabels   Json?
 }
 
 model Employee {
@@ -260,6 +270,7 @@ model Document {
   type      DocumentType
   status    DocumentStatus @default(PENDING)
   fileUrl   String?
+  name      String         @default("")
   issuedAt  DateTime?      @db.Date
   expiresAt DateTime?      @db.Date
   createdAt DateTime       @default(now())
@@ -269,7 +280,7 @@ model Document {
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   employeeId String?
 
-  @@unique([employeeId, type])
+  @@unique([employeeId, type, name])
   @@index([employeeId])
   @@index([status])
   @@index([expiresAt])
@@ -278,6 +289,7 @@ model Document {
 model Training {
   id        String         @id @default(uuid())
   type      TrainingType
+  name      String?
   status    TrainingStatus @default(PENDING)
   fileUrl   String?
   issuedAt  DateTime?      @db.Date
@@ -289,7 +301,7 @@ model Training {
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   employeeId String?
 
-  @@unique([employeeId, type])
+  @@unique([employeeId, type, name])
   @@index([employeeId])
   @@index([status])
   @@index([expiresAt])
@@ -313,6 +325,7 @@ model CompanyDocument {
   type      CompanyDocumentType
   status    DocumentStatus      @default(PENDING)
   fileUrl   String?
+  name      String              @default("")
   issuedAt  DateTime?           @db.Date
   expiresAt DateTime?           @db.Date
   createdAt DateTime            @default(now())
@@ -322,8 +335,30 @@ model CompanyDocument {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String
 
-  @@unique([companyId, type])
+  @@unique([companyId, type, name])
   @@index([companyId])
   @@index([status])
   @@index([expiresAt])
+}
+
+enum DocumentTarget {
+  EMPLOYEE_DOC
+  EMPLOYEE_TRAINING
+  COMPANY_DOC
+  COMPANY_LABOR
+}
+
+model CompanyRequiredDocument {
+  id           String         @id @default(uuid())
+  companyId    String
+  company      Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  target       DocumentTarget @default(EMPLOYEE_DOC)
+  validityDays Int?
+  isEnabled    Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@unique([companyId, name, target])
+  @@index([companyId])
 }

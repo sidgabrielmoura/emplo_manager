@@ -2,6 +2,7 @@ import { DocumentType, TrainingType } from "@/lib/generated/prisma/enums"
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { EmailService } from "@/lib/emails/service"
 
 export async function POST(req: NextRequest) {
     try {
@@ -93,6 +94,48 @@ export async function POST(req: NextRequest) {
             })),
             skipDuplicates: true
         })
+
+        try {
+            const [admins, superadmins] = await Promise.all([
+                db.user.findMany({
+                    where: {
+                        companyId: body.companyId,
+                        notificationPreferences: {
+                            newEmployeeAlerts: true
+                        }
+                    },
+                    include: {
+                        notificationPreferences: true
+                    }
+                }),
+                db.superadmin.findMany({
+                    where: {
+                        notificationPreferences: {
+                            newEmployeeAlerts: true
+                        }
+                    },
+                    include: {
+                        notificationPreferences: true
+                    }
+                })
+            ])
+
+            const allToNotify = [
+                ...admins.map(a => ({ name: a.name, email: a.notificationPreferences?.email || a.email })),
+                ...superadmins.map(s => ({ name: s.name, email: s.notificationPreferences?.email || s.email }))
+            ]
+
+            await Promise.all(allToNotify.map(target => {
+                return EmailService.sendNewEmployeeNotification({
+                    to: target.email,
+                    adminName: target.name,
+                    employeeName: employee.name,
+                    position: employee.position
+                })
+            }))
+        } catch (emailError) {
+            console.error("FAILED TO SEND NEW EMPLOYEE EMAILS:", emailError)
+        }
 
         return NextResponse.json(employee)
     } catch (error: any) {

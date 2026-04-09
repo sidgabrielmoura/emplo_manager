@@ -2,6 +2,7 @@ import db from "@/lib/prisma"
 import { addDays, startOfDay } from "date-fns"
 import { NextRequest, NextResponse } from "next/server"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
+import { updateExpiredStatuses } from "@/lib/docs"
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,6 +17,9 @@ export async function POST(req: NextRequest) {
 
     const hasAccess = await validateCompanyAccess(userId, company_id)
     if (!hasAccess) return forbiddenResponse()
+
+    // Update expired statuses for the company before fetching dashboard data
+    await updateExpiredStatuses(company_id)
 
     const today = startOfDay(new Date())
     const next30Days = addDays(today, 30)
@@ -58,19 +62,22 @@ export async function POST(req: NextRequest) {
       db.document.count({
         where: {
           employee: { companyId: company_id },
-          status: "APPROVED"
+          status: "APPROVED",
+          deletedAt: null
         }
       }),
       db.document.count({
         where: {
           employee: { companyId: company_id },
-          status: "PENDING"
+          status: "PENDING",
+          deletedAt: null
         }
       }),
       db.document.count({
         where: {
           employee: { companyId: company_id },
-          status: "EXPIRED"
+          status: "EXPIRED",
+          deletedAt: null
         }
       }),
       db.document.count({
@@ -79,7 +86,8 @@ export async function POST(req: NextRequest) {
           expiresAt: {
             gte: today,
             lte: next30Days
-          }
+          },
+          deletedAt: null
         }
       })
     ])
@@ -92,7 +100,10 @@ export async function POST(req: NextRequest) {
     });
 
     const recentDocsData = await db.document.findMany({
-      where: { employee: { companyId: company_id } },
+      where: {
+        employee: { companyId: company_id },
+        deletedAt: null
+      },
       orderBy: { updatedAt: 'desc' },
       take: 5,
       include: { employee: { select: { name: true } } }

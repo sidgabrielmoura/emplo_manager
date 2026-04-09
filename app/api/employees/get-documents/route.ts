@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
-import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
+import { forbiddenResponse, getServerUserId, unauthorizedResponse, validateCompanyAccess } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { updateExpiredStatuses } from "@/lib/docs"
 
 export async function POST(req: NextRequest) {
     try {
@@ -12,7 +13,10 @@ export async function POST(req: NextRequest) {
 
         const employee = await db.employee.findUnique({
             where: { id: employeeId },
-            select: { companyId: true }
+            select: {
+                companyId: true,
+                company: { select: { disabledDocuments: true } }
+            }
         })
 
         if (!employee) {
@@ -22,16 +26,47 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
-        const documents = await db.document.findMany({
-            where: {
-                employeeId: employeeId
-            },
-            orderBy: {
-                updatedAt: "desc",
+        await updateExpiredStatuses(employee.companyId)
+
+        const [documents, requirements] = await Promise.all([
+            db.document.findMany({
+                where: { employeeId: employeeId, deletedAt: null },
+                orderBy: { updatedAt: "desc" }
+            }),
+            db.companyRequiredDocument.findMany({
+                where: { companyId: employee.companyId, target: "EMPLOYEE_DOC", isEnabled: true }
+            })
+        ])
+
+        // 1. Filter real documents to exclude orphans (CUSTOM documents without active requirement)
+        const activeRealDocs = documents.filter(doc => {
+            if (doc.type !== "CUSTOM") return true;
+            return requirements.some(req => req.name === doc.name);
+        });
+
+        const mergedDocuments = [...activeRealDocs]
+
+        // 2. Add virtual placeholders
+        requirements.forEach(req => {
+            const exists = activeRealDocs.find(d => d.type === "CUSTOM" && d.name === req.name)
+            if (!exists) {
+                mergedDocuments.push({
+                    id: `virtual-${req.id}`,
+                    type: "CUSTOM",
+                    name: req.name,
+                    status: "PENDING",
+                    fileUrl: null,
+                    issuedAt: null,
+                    expiresAt: null,
+                    employeeId: employeeId,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    deletedAt: null
+                } as any)
             }
         })
 
-        return NextResponse.json(documents)
+        return NextResponse.json(mergedDocuments)
     } catch (error) {
         console.error(error)
         return NextResponse.json({ error: 'Erro interno' }, { status: 500 })

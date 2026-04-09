@@ -41,7 +41,7 @@ export default function PassportHistoryPage() {
                     <div>
                         <h1 className="text-3xl font-bold">Histórico de Emissões</h1>
                         <p className="text-muted-foreground mt-1">
-                            Acompanhe todas as emissões de passaportes de segurança.
+                            Acompanhe todas as emissões de perfil de qualificação.
                         </p>
                     </div>
                 </div>
@@ -107,7 +107,7 @@ export default function PassportHistoryPage() {
                                                     <Link href={`/passport/view/${emission.employee.id}`}>
                                                         <Button variant="ghost" size="sm" className="gap-2 cursor-pointer">
                                                             <Eye className="w-4 h-4" />
-                                                            Ver Passaporte
+                                                            Ver Perfil
                                                         </Button>
                                                     </Link>
                                                 </TableCell>

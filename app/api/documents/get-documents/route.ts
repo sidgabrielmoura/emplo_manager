@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
             where: {
                 employee: {
                     companyId: companyId
-                }
+                },
+                deletedAt: null
             },
             include: {
                 employee: true

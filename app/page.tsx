@@ -103,7 +103,7 @@ export default function HomePage() {
 
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-16 relative z-10">
         <div className="mb-12 flex justify-center items-center w-full lg:justify-between gap-8">
-          <Image src="/ETX-GESTAO-4.png" alt="ETX GESTÃO" width={180} height={45} className="w-auto h-10 lg:h-12" />
+          <Image src="/ETX-GESTAO-4.png" alt="ETX GESTÃO" width={180} height={45} className="w-auto h-10 lg:h-18" />
           <Button variant="destructive" disabled={loading} className="cursor-pointer" onClick={handleLogout}>
             {loading ? <Loader2 className="animate-spin" /> : 'Sair da conta'}
           </Button>

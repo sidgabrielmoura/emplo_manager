@@ -91,7 +91,7 @@ export async function auth() {
 
     useUserStore.user = data.user
     useUserStore.user_token = data.user.id
-    useUserStore.superadmin = false
+    useUserStore.superadmin = data.user.role === "SUPERADMIN"
 
     return data
 }
@@ -351,14 +351,14 @@ export async function uploadImage(file: File) {
 
 export async function updateEmployeeDocument(payload: {
     id: string,
-    expiresAt: string,
-    issuedAt: string,
+    expiresAt?: string,
+    issuedAt?: string,
     fileUrl: string,
 }, employee_id: string) {
     try {
         const { data } = await axios.put(
             '/employees/update-document',
-            { ...payload },
+            { ...payload, employeeId: employee_id },
             { baseURL: base_url }
         )
 
@@ -710,7 +710,10 @@ export async function getSuperAdminDashboard() {
     try {
         const { data } = await axios.get(
             '/superadmin/dashboard',
-            { baseURL: base_url }
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {
@@ -721,7 +724,10 @@ export async function getSuperAdminUsers() {
     try {
         const { data } = await axios.get(
             '/superadmin/users',
-            { baseURL: base_url }
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {
@@ -740,7 +746,10 @@ export async function updateSuperAdminUser(payload: {
         const { data } = await axios.put(
             '/superadmin/users',
             payload,
-            { baseURL: base_url }
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {
@@ -752,7 +761,11 @@ export async function deleteSuperAdminUser(userId: string) {
     try {
         const { data } = await axios.delete(
             '/superadmin/users',
-            { data: { userId }, baseURL: base_url }
+            {
+                data: { userId },
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {
@@ -765,7 +778,10 @@ export async function toggleCompanyStatus(companyId: string, action: "block" | "
         const { data } = await axios.put(
             '/superadmin/toggle-company',
             { companyId, action },
-            { baseURL: base_url }
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {
@@ -777,7 +793,150 @@ export async function getSuperAdminCompanies() {
     try {
         const { data } = await axios.get(
             '/superadmin/companies',
-            { baseURL: base_url }
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function getCompanyRequiredDocuments(companyId: string) {
+    try {
+        const { data } = await axios.get(
+            `/superadmin/companies/required-documents?companyId=${companyId}`,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function addCompanyRequiredDocument(payload: {
+    companyId: string,
+    name: string,
+    target: 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+    validityDays?: string | number
+}) {
+    try {
+        const { data } = await axios.post(
+            '/superadmin/companies/required-documents',
+            payload,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function toggleCompanyRequiredDocument(payload: {
+    companyId: string,
+    requirementId: string,
+    isEnabled: boolean
+}) {
+    try {
+        const { data } = await axios.patch(
+            '/superadmin/companies/required-documents',
+            {
+                type: payload.requirementId,
+                companyId: payload.companyId,
+                action: 'toggle-requirement',
+                isEnabled: payload.isEnabled
+            },
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function updateCompanyStandardDocument(payload: {
+    companyId: string,
+    type: string,
+    name?: string,
+    validityDays?: string | number
+}) {
+    try {
+        const { data } = await axios.patch(
+            '/superadmin/companies/required-documents',
+            { ...payload, action: 'set-config' },
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function deleteCompanyRequiredDocument(requirementId: string) {
+    try {
+        const { data } = await axios.delete(
+            '/superadmin/companies/required-documents',
+            {
+                data: { requirementId },
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function updateCompanyRequiredDocument(payload: {
+    requirementId: string,
+    name?: string,
+    target?: 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+    validityDays?: string | number
+}) {
+    try {
+        const { data } = await axios.put(
+            '/superadmin/companies/required-documents',
+            payload,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function toggleCompanyStandardDocument(payload: {
+    companyId: string,
+    type: string,
+    action: 'enable' | 'disable' | 'set-validity',
+    validityDays?: number
+}) {
+    try {
+        const { data } = await axios.patch(
+            '/superadmin/companies/required-documents',
+            payload,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
         )
         return data
     } catch (error) {

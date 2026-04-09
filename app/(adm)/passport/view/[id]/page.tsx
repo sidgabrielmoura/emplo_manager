@@ -1,5 +1,7 @@
 "use client"
 
+import { getDaysRemaining } from "@/lib/utils"
+
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { showEmployee, GetCompanies, getTrainings } from "@/actions/requests"
@@ -130,7 +132,7 @@ export default function PassportViewPage() {
     const monitoringItems = (trainings || []).map(t => ({
         name: TRAININGS_PT_BR[t.type] || t.type.replaceAll("_", " "),
         status: t.status,
-        expiry: t.expiresAt ? new Date(t.expiresAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"
+        expiry: t.expiresAt ? getDaysRemaining(t.expiresAt) : "—"
     }))
 
     const allApproved = monitoringItems.every(item => item.status === "APPROVED")
@@ -161,7 +163,7 @@ export default function PassportViewPage() {
                         <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
                             <div className="grid grid-cols-12 bg-slate-50 text-slate-500 font-bold text-[10px] uppercase tracking-wider border-b border-slate-100">
                                 <div className="col-span-7 p-3">Treinamento</div>
-                                <div className="col-span-5 p-3 text-right">Vencimento</div>
+                                <div className="col-span-5 p-3 text-right">Dias p/ vencer</div>
                             </div>
 
                             <div className="max-h-[600px] overflow-auto print:max-h-none print:overflow-visible">

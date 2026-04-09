@@ -1,11 +1,8 @@
 import db from "@/lib/prisma";
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { calculateDocumentDates } from "@/lib/docs";
 
-function parseDateOnly(date: string) {
-    const [year, month, day] = date.split("-").map(Number)
-    return new Date(Date.UTC(year, month - 1, day))
-}
 
 export async function PUT(req: NextRequest) {
     try {
@@ -16,6 +13,73 @@ export async function PUT(req: NextRequest) {
 
         if (!body.fileUrl) {
             return NextResponse.json({ error: 'url do arquivo não encontrada' }, { status: 400 })
+        }
+
+        const isVirtual = body.id && body.id.startsWith('virtual-')
+
+        if (isVirtual) {
+            const requirementId = body.id.replace('virtual-', '')
+            const requirement = await db.companyRequiredDocument.findUnique({
+                where: { id: requirementId }
+            })
+
+            if (!requirement) {
+                return NextResponse.json({ error: "Requisito não encontrado" }, { status: 404 })
+            }
+
+            const employee = await db.employee.findUnique({
+                where: { id: body.employeeId },
+                select: { companyId: true }
+            })
+
+            if (!employee) {
+                return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
+            }
+
+            const hasAccess = await validateCompanyAccess(userId, employee.companyId)
+            if (!hasAccess) return forbiddenResponse()
+
+            let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+            let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+            if (!issuedAt || !expiresAt) {
+                const dates = await calculateDocumentDates({
+                    companyId: employee.companyId,
+                    type: 'CUSTOM',
+                    name: requirement.name,
+                    requirementId: requirementId
+                })
+                issuedAt = dates.issuedAt
+                expiresAt = dates.expiresAt
+            }
+
+            const response = await db.document.upsert({
+                where: {
+                    employeeId_type_name: {
+                        employeeId: body.employeeId,
+                        type: 'CUSTOM',
+                        name: requirement.name
+                    }
+                },
+                update: {
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED',
+                    deletedAt: null
+                },
+                create: {
+                    employeeId: body.employeeId,
+                    type: 'CUSTOM',
+                    name: requirement.name,
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED'
+                }
+            })
+
+            return NextResponse.json(response)
         }
 
         const document = await db.document.findUnique({
@@ -30,15 +94,29 @@ export async function PUT(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, document.employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+        let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+        if (!issuedAt || !expiresAt) {
+            const dates = await calculateDocumentDates({
+                companyId: document.employee.companyId,
+                type: (document as any).type,
+                name: (document as any).name
+            })
+            issuedAt = dates.issuedAt
+            expiresAt = dates.expiresAt
+        }
+
         const response = await db.document.update({
             where: {
                 id: body.id
             },
             data: {
                 fileUrl: body.fileUrl,
-                expiresAt: body.expiresAt ? parseDateOnly(body.expiresAt) : null,
-                issuedAt: body.issuedAt ? parseDateOnly(body.issuedAt) : null,
-                status: 'APPROVED'
+                expiresAt,
+                issuedAt,
+                status: 'APPROVED',
+                deletedAt: null
             }
         })
 

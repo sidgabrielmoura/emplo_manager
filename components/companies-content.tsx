@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Ban, CheckCircle, Plus, Upload, Loader2, Building2, Users, ShieldAlert, Pencil } from "lucide-react"
+import { Search, Ban, CheckCircle, Plus, Upload, Loader2, Building2, Users, ShieldAlert, Pencil, Eye } from "lucide-react"
 import {
   Dialog,
   DialogClose,
@@ -26,6 +26,7 @@ import { createCompany, uploadImage, getSuperAdminCompanies, toggleCompanyStatus
 import { useUserStore } from "@/stores/user"
 import { useSnapshot } from "valtio"
 import { maskCNPJ, maskPhone } from "@/helpers"
+import Link from "next/link"
 
 type Company = {
   id: string
@@ -369,6 +370,15 @@ export function CompaniesContent() {
                     </TableCell>
                     <TableCell className="text-right pr-4">
                       <div className="flex items-center justify-end gap-1">
+                        <Link href={`/superadmin/companies/${company.id}`}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1.5 rounded-xl text-xs font-bold cursor-pointer text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            <Eye className="w-3.5 h-3.5" /> Detalhes
+                          </Button>
+                        </Link>
                         <Button
                           variant="ghost"
                           size="sm"

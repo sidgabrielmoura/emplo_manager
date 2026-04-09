@@ -35,7 +35,8 @@ export async function POST(req: NextRequest) {
         }
 
         const superadmin = await db.superadmin.findUnique({
-            where: { id: decoded.sub }
+            where: { id: decoded.sub },
+            include: { notificationPreferences: true }
         })
 
         if (!superadmin) {
@@ -52,7 +53,8 @@ export async function POST(req: NextRequest) {
                     id: superadmin.id,
                     email: superadmin.email,
                     role: "SUPERADMIN",
-                    name: superadmin.name
+                    name: superadmin.name,
+                    notificationPreferences: superadmin.notificationPreferences
                 },
             },
             { status: 200 }

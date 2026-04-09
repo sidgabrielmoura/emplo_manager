@@ -112,6 +112,18 @@ export function AppHeader({ onMenuClick }: AppHeaderProps) {
         <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-lg border-slate-100">
           <DropdownMenuLabel className="font-bold text-slate-900">Minha Conta</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <div className="sm:hidden">
+            {!pathname.startsWith('/superadmin') && (
+              <Link href={'/'}>
+                <DropdownMenuItem className="cursor-pointer">Trocar Empresa</DropdownMenuItem>
+              </Link>
+            )}
+            {user?.role === "SUPERADMIN" && !pathname.startsWith('/superadmin') ? (
+              <Link href="/superadmin/dashboard"><DropdownMenuItem className="cursor-pointer">Área Superadmin</DropdownMenuItem></Link>
+            ) : (
+              <Link href="/"><DropdownMenuItem className="cursor-pointer">Área Administrativa</DropdownMenuItem></Link>
+            )}
+          </div>
           <DropdownMenuItem disabled={loading} onClick={handleLogout} className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 font-medium">
             Sair da Conta
             {loading && <Loader2 className="ml-auto w-4 h-4 animate-spin" />}

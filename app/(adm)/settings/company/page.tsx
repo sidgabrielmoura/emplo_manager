@@ -1,5 +1,7 @@
 "use client"
 
+import { getDaysRemaining } from "@/lib/utils"
+
 import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -61,19 +63,16 @@ export default function CompanySettingsPage() {
     const [documents, setDocuments] = useState<any[]>([])
     const [docsLoading, setDocsLoading] = useState(true)
 
-    // Upload state variables
+
     const [uploadLoading, setUploadLoading] = useState(false)
     const [selectedType, setSelectedType] = useState<string | null>(null)
-    const [uploadDate, setUploadDate] = useState('')
-    const [uploadExpire, setUploadExpire] = useState('')
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
-    // Explicit HTML Dialog reference hack to close it later
     const docInputRef = useRef<HTMLInputElement>(null)
     const dialogCloseRef = useRef<HTMLButtonElement>(null)
 
     const [form, setForm] = useState({
-        name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', imageUrl: ''
+        name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', imageUrl: '', disabledDocuments: [] as string[]
     })
 
     useEffect(() => {
@@ -102,7 +101,8 @@ export default function CompanySettingsPage() {
                         state: loadedCompany.state || '',
                         city: loadedCompany.city || '',
                         responsible: loadedCompany.responsible || '',
-                        imageUrl: loadedCompany.imageUrl || ''
+                        imageUrl: loadedCompany.imageUrl || '',
+                        disabledDocuments: (loadedCompany as any).disabledDocuments || []
                     })
 
                     setDocsLoading(true)
@@ -148,9 +148,10 @@ export default function CompanySettingsPage() {
         }
     }
 
-    const handleUploadDocument = async () => {
+    const handleUploadDocument = async (virtualId?: string) => {
         const companyId = company_selected?.id || localStorage.getItem('company_id')
-        if (!uploadFile || !selectedType || !companyId) return
+        if (!uploadFile || !companyId) return
+        if (!selectedType && !virtualId) return
 
         setUploadLoading(true)
         try {
@@ -162,11 +163,10 @@ export default function CompanySettingsPage() {
             if (!uploaded) throw new Error("Upload failed")
 
             await updateCompanyDocument({
+                id: virtualId,
                 companyId: companyId,
-                type: selectedType,
-                fileUrl: uploaded.url,
-                issuedAt: uploadDate || undefined,
-                expiresAt: uploadExpire || undefined
+                type: selectedType || 'CUSTOM',
+                fileUrl: uploaded.url
             })
 
             toast.success("Documento enviado com sucesso!")
@@ -176,8 +176,6 @@ export default function CompanySettingsPage() {
             setDocuments(updatedDocs)
 
             setUploadFile(null)
-            setUploadDate('')
-            setUploadExpire('')
             setSelectedType(null)
             dialogCloseRef.current?.click()
         } catch (error) {
@@ -188,7 +186,7 @@ export default function CompanySettingsPage() {
         }
     }
 
-    const renderDocumentTable = (docList: { type: string, label: string }[]) => {
+    const renderDocumentTable = (docList: { type: string, label: string }[], isAdditional?: boolean) => {
         const stats = {
             total: docList.length,
             approved: docList.filter(item => documents.find(d => d.type === item.type)?.status === 'APPROVED').length,
@@ -197,40 +195,42 @@ export default function CompanySettingsPage() {
 
         return (
             <div className="space-y-6 w-full">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-                    <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
-                        <div className="p-3 bg-slate-50 rounded-2xl">
-                            <FileText className="w-5 h-5 text-slate-400" />
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total de Itens</p>
-                            <p className="text-xl font-black text-slate-700">{stats.total}</p>
-                        </div>
-                    </Card>
-                    <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
-                        <div className="p-3 bg-emerald-50 rounded-2xl">
-                            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Aprovados</p>
-                            <p className="text-xl font-black text-emerald-700">{stats.approved}</p>
-                        </div>
-                    </Card>
-                    <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
-                        <div className="p-3 bg-amber-50 rounded-2xl">
-                            <Clock className="w-5 h-5 text-amber-500" />
-                        </div>
-                        <div className="text-center">
-                            <p className="text-xs font-bold text-amber-500 uppercase tracking-wider">Pendentes</p>
-                            <p className="text-xl font-black text-amber-700">{stats.pending}</p>
-                        </div>
-                    </Card>
-                </div>
+                {!isAdditional && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
+                        <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
+                            <div className="p-3 bg-slate-50 rounded-2xl">
+                                <FileText className="w-5 h-5 text-slate-400" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total de Itens</p>
+                                <p className="text-xl font-black text-slate-700">{stats.total}</p>
+                            </div>
+                        </Card>
+                        <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
+                            <div className="p-3 bg-emerald-50 rounded-2xl">
+                                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Aprovados</p>
+                                <p className="text-xl font-black text-emerald-700">{stats.approved}</p>
+                            </div>
+                        </Card>
+                        <Card className="rounded-3xl border-slate-100 shadow-sm bg-white p-4 flex items-center gap-4">
+                            <div className="p-3 bg-amber-50 rounded-2xl">
+                                <Clock className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <div className="text-center">
+                                <p className="text-xs font-bold text-amber-500 uppercase tracking-wider">Pendentes</p>
+                                <p className="text-xl font-black text-amber-700">{stats.pending}</p>
+                            </div>
+                        </Card>
+                    </div>
+                )}
 
                 <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
                         <CardTitle className="text-slate-800 text-xl font-bold flex items-center gap-2">
-                            <FileText className="w-5 h-5 text-emerald-600" /> Referência de Documentos
+                            <FileText className="w-5 h-5 text-emerald-600" /> {isAdditional ? "Documentos Adicionais" : "Referência de Documentos"}
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="p-0 px-8">
@@ -247,16 +247,20 @@ export default function CompanySettingsPage() {
                                         <TableRow>
                                             <TableHead>Documento</TableHead>
                                             <TableHead className="w-40! text-center">Status</TableHead>
-                                            <TableHead className="w-40! text-center">Emissão</TableHead>
-                                            <TableHead className="w-40! text-center">Vencimento</TableHead>
+                                            <TableHead className="w-40! text-center">Data de emissão</TableHead>
+                                            <TableHead className="w-40! text-center">Dias para vencer</TableHead>
                                             <TableHead className="text-right">Ação</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {docList.map(({ type, label }) => {
-                                            const docData = documents.find(d => d.type === type)
+                                            const docData = documents.find(d =>
+                                                isAdditional
+                                                    ? (d.type === "CUSTOM" && d.name === label)
+                                                    : d.type === type
+                                            )
                                             return (
-                                                <TableRow key={type}>
+                                                <TableRow key={type + label}>
                                                     <TableCell className="font-medium text-slate-700 max-w-[250px] truncate">{label}</TableCell>
                                                     <TableCell className="text-center">
                                                         <Badge variant={!docData ? "secondary" : docData.status === "APPROVED" ? "default" : "destructive"}>
@@ -267,7 +271,7 @@ export default function CompanySettingsPage() {
                                                         {docData?.issuedAt ? new Date(docData.issuedAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
                                                     </TableCell>
                                                     <TableCell className="text-center text-slate-500">
-                                                        {docData?.expiresAt ? new Date(docData.expiresAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
+                                                        {docData?.expiresAt ? getDaysRemaining(docData.expiresAt) : "—"}
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         {docData?.fileUrl ? (
@@ -283,7 +287,7 @@ export default function CompanySettingsPage() {
                                                                         <Upload className="w-4 h-4" /> Enviar
                                                                     </Button>
                                                                 </DialogTrigger>
-                                                                <DialogContent className="sm:max-w-md rounded-2xl">
+                                                                <DialogContent className="max-w-2xl! w-full rounded-2xl">
                                                                     <div className="space-y-4 pt-4">
                                                                         <h3 className="font-bold text-lg text-slate-800">Enviar: {label}</h3>
 
@@ -308,16 +312,6 @@ export default function CompanySettingsPage() {
                                                                             )}
                                                                         </div>
 
-                                                                        <div className="grid grid-cols-2 gap-4">
-                                                                            <div className="space-y-1">
-                                                                                <Label className="text-xs font-bold text-slate-500">Data de Emissão (Opcional)</Label>
-                                                                                <Input type="date" value={uploadDate} onChange={e => setUploadDate(e.target.value)} className="rounded-xl bg-slate-50/50" />
-                                                                            </div>
-                                                                            <div className="space-y-1">
-                                                                                <Label className="text-xs font-bold text-slate-500">Data de Validade (Opcional)</Label>
-                                                                                <Input type="date" value={uploadExpire} onChange={e => setUploadExpire(e.target.value)} className="rounded-xl bg-slate-50/50" />
-                                                                            </div>
-                                                                        </div>
 
                                                                         <div className="flex gap-2 pt-4">
                                                                             <DialogTrigger asChild>
@@ -325,7 +319,13 @@ export default function CompanySettingsPage() {
                                                                                     Cancelar
                                                                                 </Button>
                                                                             </DialogTrigger>
-                                                                            <Button onClick={handleUploadDocument} disabled={!uploadFile || uploadLoading} className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer">
+                                                                            <Button onClick={() => {
+                                                                                if (isAdditional && docData?.id) {
+                                                                                    handleUploadDocument(docData.id)
+                                                                                } else {
+                                                                                    handleUploadDocument()
+                                                                                }
+                                                                            }} disabled={!uploadFile || uploadLoading} className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer">
                                                                                 {uploadLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                                                                                 Salvar
                                                                             </Button>
@@ -427,27 +427,27 @@ export default function CompanySettingsPage() {
 
                                     <div className="space-y-2">
                                         <Label className="font-bold text-slate-700">E-mail</Label>
-                                        <Input value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="rounded-xl h-11 bg-slate-50/50" />
+                                        <Input value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} className="rounded-xl h-11 bg-slate-50/50" />
                                     </div>
 
                                     <div className="space-y-2">
                                         <Label className="font-bold text-slate-700">Telefone</Label>
-                                        <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} className="rounded-xl h-11 bg-slate-50/50" />
+                                        <Input value={form.phone} onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))} className="rounded-xl h-11 bg-slate-50/50" />
                                     </div>
 
                                     <div className="space-y-2 md:col-span-2 mt-4 pt-6 border-t border-slate-100">
                                         <Label className="font-bold text-slate-700">Endereço Completo</Label>
-                                        <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} className="rounded-xl h-11 bg-slate-50/50" />
+                                        <Input value={form.address} onChange={e => setForm(prev => ({ ...prev, address: e.target.value }))} className="rounded-xl h-11 bg-slate-50/50" />
                                     </div>
 
                                     <div className="space-y-2">
                                         <Label className="font-bold text-slate-700">Cidade</Label>
-                                        <Input value={form.city} onChange={e => setForm({ ...form, city: e.target.value })} className="rounded-xl h-11 bg-slate-50/50" />
+                                        <Input value={form.city} onChange={e => setForm(prev => ({ ...prev, city: e.target.value }))} className="rounded-xl h-11 bg-slate-50/50" />
                                     </div>
 
                                     <div className="space-y-2">
                                         <Label className="font-bold text-slate-700">Estado (UF)</Label>
-                                        <Input value={form.state} onChange={e => setForm({ ...form, state: e.target.value })} className="rounded-xl h-11 bg-slate-50/50" />
+                                        <Input value={form.state} onChange={e => setForm(prev => ({ ...prev, state: e.target.value }))} className="rounded-xl h-11 bg-slate-50/50" />
                                     </div>
                                 </div>
 
@@ -461,12 +461,21 @@ export default function CompanySettingsPage() {
                         </Card>
                     </TabsContent>
 
-                    <TabsContent value="company-docs" className="mt-8">
-                        {renderDocumentTable(COMPANY_DOCS)}
+                    <TabsContent value="company-docs" className="mt-8 space-y-8">
+                        {renderDocumentTable(COMPANY_DOCS.filter(d => !(form.disabledDocuments || []).includes(d.type)))}
+
+                        {documents.filter(d => d.type === 'CUSTOM').length > 0 && (
+                            renderDocumentTable(
+                                documents
+                                    .filter(d => d.type === 'CUSTOM')
+                                    .map(d => ({ type: 'CUSTOM', label: d.name })),
+                                true
+                            )
+                        )}
                     </TabsContent>
 
                     <TabsContent value="labor-docs" className="mt-8">
-                        {renderDocumentTable(LABOR_DOCS)}
+                        {renderDocumentTable(LABOR_DOCS.filter(d => !(form.disabledDocuments || []).includes(d.type)))}
                     </TabsContent>
                 </Tabs>
             </div>

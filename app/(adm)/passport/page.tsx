@@ -42,11 +42,11 @@ export default function PassportSelectionPage() {
         setLoading(employeeId)
         try {
             await emitPassport(employeeId)
-            toast.success("Passaporte emitido com sucesso!")
+            toast.success("Perfil de qualificação emitido com sucesso!")
             router.push(`/passport/view/${employeeId}`)
         } catch (error) {
             console.error(error)
-            toast.error("Erro ao emitir passaporte")
+            toast.error("Erro ao emitir perfil de qualificação")
         } finally {
             setLoading(null)
         }
@@ -57,9 +57,9 @@ export default function PassportSelectionPage() {
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Passaporte de Segurança</h1>
+                        <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Perfil de qualificação</h1>
                         <p className="text-muted-foreground mt-1">
-                            Selecione um funcionário para emitir ou visualizar o passaporte.
+                            Selecione um funcionário para emitir ou visualizar o perfil de qualificação.
                         </p>
                     </div>
                     <Link href="/passport/history">
@@ -182,7 +182,7 @@ export default function PassportSelectionPage() {
                                             className="gap-2 flex-1 cursor-pointer bg-primary hover:bg-primary/90 rounded-xl"
                                         >
                                             <ShieldCheck className="w-4 h-4" />
-                                            {loading === employee.id ? "Emitindo..." : "Emitir Passaporte"}
+                                            {loading === employee.id ? "Emitindo..." : "Emitir Perfil de qualificação"}
                                         </Button>
                                     </div>
                                 </CardContent>

@@ -1,11 +1,8 @@
 import db from "@/lib/prisma";
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { calculateDocumentDates } from "@/lib/docs";
 
-function parseDateOnly(date: string) {
-    const [year, month, day] = date.split("-").map(Number)
-    return new Date(Date.UTC(year, month - 1, day))
-}
 
 export async function PUT(req: NextRequest) {
     try {
@@ -18,29 +15,87 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: 'URL do arquivo não encontrada' }, { status: 400 })
         }
 
-        if (!body.id && body.companyId && body.type) {
+        const isVirtual = body.id && body.id.startsWith('virtual-')
+
+        if (isVirtual) {
+            const requirementId = body.id.replace('virtual-', '')
+            const requirement = await db.companyRequiredDocument.findUnique({
+                where: { id: requirementId }
+            })
+
+            if (!requirement) {
+                return NextResponse.json({ error: "Requisito não encontrado" }, { status: 404 })
+            }
+
             const hasAccess = await validateCompanyAccess(userId, body.companyId)
             if (!hasAccess) return forbiddenResponse()
 
-            const created = await db.companyDocument.upsert({
+            const { issuedAt, expiresAt } = await calculateDocumentDates({
+                companyId: body.companyId,
+                type: 'CUSTOM',
+                name: requirement.name,
+                requirementId: requirementId
+            })
+
+            const response = await db.companyDocument.upsert({
                 where: {
-                    companyId_type: {
+                    companyId_type_name: {
                         companyId: body.companyId,
-                        type: body.type
+                        type: 'CUSTOM',
+                        name: requirement.name
                     }
                 },
                 update: {
                     fileUrl: body.fileUrl,
-                    expiresAt: body.expiresAt ? parseDateOnly(body.expiresAt) : null,
-                    issuedAt: body.issuedAt ? parseDateOnly(body.issuedAt) : null,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED'
+                },
+                create: {
+                    companyId: body.companyId,
+                    type: 'CUSTOM',
+                    name: requirement.name,
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED'
+                }
+            })
+
+            return NextResponse.json(response)
+        }
+
+        if (!body.id && body.companyId && body.type) {
+            const hasAccess = await validateCompanyAccess(userId, body.companyId)
+            if (!hasAccess) return forbiddenResponse()
+
+            const { issuedAt, expiresAt } = await calculateDocumentDates({
+                companyId: body.companyId,
+                type: body.type,
+                name: body.name
+            })
+
+            const created = await db.companyDocument.upsert({
+                where: {
+                    companyId_type_name: {
+                        companyId: body.companyId,
+                        type: body.type,
+                        name: body.name || ""
+                    }
+                },
+                update: {
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
                     status: 'APPROVED'
                 },
                 create: {
                     companyId: body.companyId,
                     type: body.type,
+                    name: body.name || "",
                     fileUrl: body.fileUrl,
-                    expiresAt: body.expiresAt ? parseDateOnly(body.expiresAt) : null,
-                    issuedAt: body.issuedAt ? parseDateOnly(body.issuedAt) : null,
+                    expiresAt,
+                    issuedAt,
                     status: 'APPROVED'
                 }
             })
@@ -60,13 +115,20 @@ export async function PUT(req: NextRequest) {
             const hasAccess = await validateCompanyAccess(userId, existingDoc.companyId)
             if (!hasAccess) return forbiddenResponse()
 
+            const { issuedAt, expiresAt } = await calculateDocumentDates({
+                companyId: existingDoc.companyId,
+                type: (existingDoc as any).type,
+                name: (existingDoc as any).name
+            })
+
             const response = await db.companyDocument.update({
                 where: { id: body.id },
                 data: {
                     fileUrl: body.fileUrl,
-                    expiresAt: body.expiresAt ? parseDateOnly(body.expiresAt) : null,
-                    issuedAt: body.issuedAt ? parseDateOnly(body.issuedAt) : null,
-                    status: 'APPROVED'
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED',
+                    deletedAt: null
                 }
             })
 

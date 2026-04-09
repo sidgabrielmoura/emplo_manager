@@ -8,12 +8,14 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { StatusBadge } from "@/components/status-badge"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { useRouter } from "next/navigation"
 import { getSuperAdminDashboard } from "@/actions/requests"
 import { SuperAdminAppLayout } from "@/components/superadm-layout"
 
 export default function SuperAdminDashboard() {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const router = useRouter()
 
     useEffect(() => {
         getSuperAdminDashboard()
@@ -23,9 +25,12 @@ export default function SuperAdminDashboard() {
             })
             .catch((err) => {
                 console.error(err)
+                if (err.response?.status === 403 || err.response?.status === 401) {
+                    router.push('/superadmin/login')
+                }
                 setLoading(false)
             })
-    }, [])
+    }, [router])
 
     if (loading) {
         return (
@@ -41,6 +46,25 @@ export default function SuperAdminDashboard() {
                         ))}
                     </div>
                     <Skeleton className="h-64 w-full" />
+                </div>
+            </SuperAdminAppLayout>
+        )
+    }
+
+    if (!data) {
+        return (
+            <SuperAdminAppLayout>
+                <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Não foi possível carregar os dados</h2>
+                    <p className="text-slate-500 text-center max-w-md">
+                        Verifique sua conexão ou tente fazer login novamente.
+                    </p>
+                    <Link
+                        href="/superadmin/login"
+                        className="bg-emerald-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-emerald-700 transition-colors"
+                    >
+                        Voltar para o Login
+                    </Link>
                 </div>
             </SuperAdminAppLayout>
         )

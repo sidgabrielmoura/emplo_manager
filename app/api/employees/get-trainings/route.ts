@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { updateExpiredStatuses } from "@/lib/docs"
 
 export async function POST(req: NextRequest) {
     try {
@@ -9,6 +10,10 @@ export async function POST(req: NextRequest) {
 
         const body = await req.json()
         const employeeId = body.employee_id
+
+        if (!employeeId) {
+            return NextResponse.json({ error: "employee_id é obrigatório" }, { status: 400 })
+        }
 
         const employee = await db.employee.findUnique({
             where: { id: employeeId },
@@ -22,16 +27,57 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
-        const trainings = await db.training.findMany({
-            where: {
-                employeeId: employeeId
-            },
-            orderBy: {
-                updatedAt: "desc",
+        // Update expired statuses for the company before fetching
+        await updateExpiredStatuses(employee.companyId)
+
+        const [trainings, requirements] = await Promise.all([
+            db.training.findMany({
+                where: {
+                    employeeId: employeeId,
+                    deletedAt: null
+                },
+                orderBy: {
+                    updatedAt: "desc",
+                }
+            }),
+            db.companyRequiredDocument.findMany({
+                where: {
+                    companyId: employee.companyId,
+                    target: "EMPLOYEE_TRAINING",
+                    isEnabled: true
+                }
+            })
+        ])
+
+        // 1. Filter real trainings to exclude orphans
+        const activeRealTrainings = trainings.filter(t => {
+            if (t.type !== "CUSTOM") return true;
+            return requirements.some(req => req.name === t.name);
+        });
+
+        const mergedTrainings = [...activeRealTrainings]
+
+        // 2. Add virtual placeholders
+        requirements.forEach(req => {
+            const exists = activeRealTrainings.find(t => t.type === "CUSTOM" && t.name === req.name)
+            if (!exists) {
+                mergedTrainings.push({
+                    id: `virtual-${req.id}`,
+                    type: "CUSTOM",
+                    name: req.name,
+                    status: "PENDING",
+                    fileUrl: null,
+                    issuedAt: null,
+                    expiresAt: null,
+                    employeeId: employeeId,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    deletedAt: null
+                } as any)
             }
         })
 
-        return NextResponse.json(trainings)
+        return NextResponse.json(mergedTrainings)
     } catch (error) {
         console.error(error)
         return NextResponse.json({ error: 'Erro interno' }, { status: 500 })

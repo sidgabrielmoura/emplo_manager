@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
                 address: true,
                 state: true,
                 city: true,
-                responsible: true
+                responsible: true,
+                disabledDocuments: true,
+                createdAt: true
             }
         })
 

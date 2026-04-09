@@ -1,23 +1,27 @@
 import db from "@/lib/prisma"
-import { getServerUserId, unauthorizedResponse } from "@/lib/auth"
+import { getSessionUser, unauthorizedResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function PUT(req: NextRequest) {
     try {
-        const userId = await getServerUserId(req)
-        if (!userId) return unauthorizedResponse()
+        const user = await getSessionUser(req)
+        if (!user) return unauthorizedResponse()
 
         const { documentExpirationAlerts, newEmployeeAlerts, email } = await req.json()
 
+        const isSuperadminTable = await db.superadmin.findUnique({ where: { id: user.id } })
+
         const updatedPreferences = await db.notificationPreferences.upsert({
-            where: { userId: userId },
+            where: isSuperadminTable
+                ? { superadminId: user.id }
+                : { userId: user.id },
             update: {
                 documentExpirationAlerts,
                 newEmployeeAlerts,
                 email
             },
             create: {
-                userId: userId,
+                ...(isSuperadminTable ? { superadminId: user.id } : { userId: user.id }),
                 documentExpirationAlerts,
                 newEmployeeAlerts,
                 email

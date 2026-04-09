@@ -38,14 +38,14 @@ export async function getSessionUser(req: NextRequest) {
     if (user) return user;
 
     const superadmin = await db.superadmin.findUnique({
-        where: { id: userId }
+        where: { id: userId },
+        include: { notificationPreferences: true }
     });
 
     if (superadmin) {
         return {
             ...superadmin,
             role: "SUPERADMIN",
-            notificationPreferences: null
         };
     }
 
