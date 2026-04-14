@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { Search, Eye, FileText, CheckCircle2, AlertCircle, Clock, BarChart3, Upload, Loader2 } from "lucide-react"
-import { getDocsDashboard, getDocuments, updateEmployeeDocument, uploadImage } from "@/actions/requests"
+import { Search, Eye, FileText, CheckCircle2, AlertCircle, Clock, BarChart3, Upload, Loader2, Download } from "lucide-react"
+import { getDocsDashboard, getDocuments, updateEmployeeDocument, uploadImage, downloadFile } from "@/actions/requests"
 import { useSnapshot } from "valtio"
 import { useCompanyStore } from "@/stores/company"
 import { useDocumentStore } from "@/stores/documents"
@@ -290,11 +290,26 @@ export function DocumentsContent() {
                       </TableCell>
                       {doc.status !== "PENDING" ? (
                         <TableCell className="px-6 py-4 text-right">
-                          <Link href={doc.fileUrl || ''} target="_blank">
-                            <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
-                              <Eye className="size-4" />
-                            </Button>
-                          </Link>
+                          <div className="flex items-center justify-end gap-1">
+                            <Link href={doc.fileUrl || ''} target="_blank">
+                              <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
+                                <Eye className="size-4" />
+                              </Button>
+                            </Link>
+                            {doc.fileUrl && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="size-8 p-0 cursor-pointer rounded-lg hover:bg-blue-50 hover:text-blue-600 text-slate-400"
+                                onClick={() => downloadFile(
+                                  doc.fileUrl!,
+                                  `${translateDocumentName(doc.type, doc.name)}_${doc.employee?.name || ''}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`
+                                )}
+                              >
+                                <Download className="size-4" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       ) : (
                         <>
@@ -309,14 +324,6 @@ export function DocumentsContent() {
                                 <div className="space-y-5">
                                   <h3 className="text-lg font-semibold">Enviar documento</h3>
 
-                                  <input
-                                    ref={inputRef}
-                                    type="file"
-                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                    hidden
-                                    onChange={(e) => handleSelect(e.target.files)}
-                                  />
-
                                   <div className="flex flex-col gap-2">
                                     <Button
                                       variant="outline"
@@ -330,6 +337,14 @@ export function DocumentsContent() {
                                       Formatos aceitos: PDF, Word, Excel e PowerPoint
                                     </p>
                                   </div>
+
+                                  <input
+                                    ref={inputRef}
+                                    type="file"
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                    hidden
+                                    onChange={(e) => handleSelect(e.target.files)}
+                                  />
 
                                   {preview && file && (
                                     <div className="flex items-center justify-between gap-3 rounded-md border p-2">

@@ -1,7 +1,7 @@
 
 export const getBaseEmailTemplate = (content: string, title: string, buttonText?: string, buttonUrl?: string) => {
   const primaryColor = "#22c55e";
-  const logoUrl = "https://emplo-manager.vercel.app/ETX-GESTAO-4.png";
+  const logoUrl = "https://www.xn--etxgesto-xza.com.br/ETX-GESTAO-4.png";
 
   return `
     <!DOCTYPE html>

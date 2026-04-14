@@ -58,14 +58,19 @@ export async function validateCompanyAccess(userId: string, companyId: string) {
 
     const user = await db.user.findUnique({
         where: { id: userId },
-        select: { role: true, companyId: true }
+        select: { role: true, companyId: true, company: { select: { status: true } } }
     });
 
     if (!user) return false;
 
     if (user.role === "SUPERADMIN") return true;
 
-    return user.companyId === companyId;
+    if (user.companyId === companyId) {
+        if (user.company?.status === "BLOCKED") return false;
+        return true;
+    }
+
+    return false;
 }
 
 export async function isSuperAdmin(req: NextRequest) {

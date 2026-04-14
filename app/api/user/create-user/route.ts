@@ -11,10 +11,8 @@ export async function POST(req: NextRequest) {
         const body = await req.json()
         const { name, email, password, role, companyId } = body
 
-        // Only ADMINs can create users
-        if (userSession.role !== "ADMIN") return forbiddenResponse()
+        if (!["ADMIN", "SUPERADMIN"].includes(userSession.role)) return forbiddenResponse()
 
-        // Can only create users for their own company
         const hasAccess = await validateCompanyAccess(userSession.id, companyId)
         if (!hasAccess) return forbiddenResponse()
 

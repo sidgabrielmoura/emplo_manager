@@ -336,7 +336,7 @@ export async function uploadImage(file: File) {
 
         formData.append("folder", "employees")
 
-        const { data } = await axios.post("/cloudinary/upload", formData, {
+        const { data } = await axios.post("/upload", formData, {
             baseURL: base_url,
             headers: {
                 "Content-Type": "multipart/form-data",
@@ -942,4 +942,79 @@ export async function toggleCompanyStandardDocument(payload: {
     } catch (error) {
         throw error
     }
+}
+
+/**
+ * Força o download de um arquivo individual pelo proxy da API.
+ * @param fileUrl URL pública do arquivo no R2
+ * @param fileName Nome sugerido para o arquivo baixado
+ */
+export function downloadFile(fileUrl: string, fileName: string) {
+    const params = new URLSearchParams({ fileUrl, fileName })
+    const link = document.createElement('a')
+    link.href = `${base_url}/download?${params.toString()}`
+    link.download = fileName
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+}
+
+/**
+ * Baixa todos os documentos de um funcionário como um arquivo .zip.
+ * @param employeeId ID do funcionário
+ * @param employeeName Nome do funcionário (usado no nome do arquivo)
+ */
+export async function downloadEmployeeZip(employeeId: string, employeeName: string) {
+    const response = await fetch(`${base_url}/download/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ employeeId, type: 'documents' }),
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(err.error || 'Erro ao gerar ZIP')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const safeName = employeeName.replace(/\s+/g, '_')
+    link.href = url
+    link.download = `documentos_${safeName}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+}
+
+/**
+ * Baixa todos os treinamentos de um funcionário como um arquivo .zip.
+ * @param employeeId ID do funcionário
+ * @param employeeName Nome do funcionário (usado no nome do arquivo)
+ */
+export async function downloadTrainingsZip(employeeId: string, employeeName: string) {
+    const response = await fetch(`${base_url}/download/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ employeeId, type: 'trainings' }),
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(err.error || 'Erro ao gerar ZIP')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const safeName = employeeName.replace(/\s+/g, '_')
+    link.href = url
+    link.download = `treinamentos_${safeName}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
 }

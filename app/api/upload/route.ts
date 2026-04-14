@@ -1,6 +1,7 @@
-import cloudinary from "@/lib/cloudinary"
+import { r2 } from "@/lib/r2"
 import { getServerUserId, unauthorizedResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { PutObjectCommand } from "@aws-sdk/client-s3"
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,6 +20,8 @@ export async function POST(req: NextRequest) {
         : []
 
     const folder = (formData.get("folder") as string) || "gerenciow"
+    const bucketName = process.env.CLOUDFLARE_BUCKET_NAME!
+    const publicDomain = process.env.CLOUDFLARE_PUBLIC_DOMAIN! // Ex: https://xxx.r2.dev or custom domain
 
     if (!files.length) {
       return NextResponse.json({ error: "Arquivos não enviados" }, { status: 400 })
@@ -29,27 +32,24 @@ export async function POST(req: NextRequest) {
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
 
-        const isPDF = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+        // Gerar chave única mantendo pasta e nome original
+        const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`
+        const key = `${folder}/${fileName}`
 
-        const result = await new Promise<any>((resolve, reject) => {
-          cloudinary.uploader.upload_stream(
-            {
-              folder,
-              resource_type: isPDF ? "image" : "auto",
-              use_filename: true,
-              unique_filename: true,
-              public_id: file.name.substring(0, file.name.lastIndexOf(".")),
-            },
-            (error, result) => {
-              if (error) reject(error)
-              resolve(result)
-            }
-          ).end(buffer)
-        })
+        await r2.send(
+          new PutObjectCommand({
+            Bucket: bucketName,
+            Key: key,
+            Body: buffer,
+            ContentType: file.type,
+          })
+        )
+
+        const url = `${publicDomain}/${key}`
 
         return {
-          url: result.secure_url,
-          public_id: result.public_id,
+          url: url,
+          public_id: key, // Usamos o key como id único equivalente ao do cloudinary
           originalName: file.name,
         }
       })
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(uploads.length === 1 ? uploads[0] : uploads)
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: "Erro ao fazer upload" }, { status: 500 })
+    console.error("Upload error:", error)
+    return NextResponse.json({ error: "Erro ao fazer upload para R2" }, { status: 500 })
   }
 }

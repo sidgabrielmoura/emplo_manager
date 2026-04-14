@@ -3,7 +3,7 @@ import { Resend } from 'resend';
 import { getExpirationEmailHtml, getNewEmployeeEmailHtml } from './templates';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'notificacoes@etxgestao.com.br';
+const FROM_EMAIL = 'ETX Gestão <onboarding@resend.dev>';
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export class EmailService {
@@ -38,7 +38,7 @@ export class EmailService {
             const { data, error } = await resend.emails.send({
                 from: FROM_EMAIL,
                 to: [to],
-                subject,
+                subject: subject,
                 html,
             });
 

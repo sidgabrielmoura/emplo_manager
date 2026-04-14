@@ -17,7 +17,10 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
         }
 
-        if (userSession.role !== "ADMIN" || userSession.companyId !== targetUser.companyId) {
+        const isSuperAdmin = userSession.role === "SUPERADMIN"
+        const isCompanyAdmin = userSession.role === "ADMIN" && userSession.companyId === targetUser.companyId
+
+        if (!isSuperAdmin && !isCompanyAdmin) {
             return forbiddenResponse()
         }
 

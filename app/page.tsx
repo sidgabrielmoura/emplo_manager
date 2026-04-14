@@ -9,7 +9,9 @@ import {
   Plus,
   Loader2,
   Upload,
-  LayoutDashboard
+  LayoutDashboard,
+  ShieldAlert,
+  MessageCircle
 } from "lucide-react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,7 +21,7 @@ import { useEffect, useState, useRef } from "react"
 import { GetCompanies, createCompany, logout, uploadImage } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
 import { useSnapshot } from "valtio"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useUserStore } from "@/stores/user"
@@ -31,6 +33,7 @@ export default function HomePage() {
   const { companies } = useSnapshot(useCompanyStore)
   const { user_token, user } = useSnapshot(useUserStore)
   const [loading, setLoading] = useState(false)
+  const [blockedModalOpenControl, setBlockedModalOpenControl] = useState(false)
   const [open, setOpen] = useState(false)
 
   const [form, setForm] = useState({
@@ -172,65 +175,101 @@ export default function HomePage() {
             <p className="text-slate-500 mb-8 max-w-sm mx-auto">
               Você ainda não gerencia nenhuma empresa. Entre em contato com o suporte.
             </p>
-            {/* <Button className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-10 h-12 font-bold transition-all hover:scale-[1.02]">
-              Criar Primeira Empresa
-            </Button> */}
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {companies.map((company) => (
-              <Card
-                key={company.id}
-                onClick={() => handleCompanyClick(company.id)}
-                className="p-6 bg-white/80 backdrop-blur border border-slate-100 hover:shadow-xl hover:shadow-emerald-900/5 hover:border-emerald-200 transition-all duration-300 cursor-pointer group rounded-3xl"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-100 shadow-sm shrink-0">
-                      <img
-                        src={company.imageUrl || "/placeholder-company.png"}
-                        alt={company.name}
-                        className="w-full h-full object-cover"
-                      />
+            {companies.map((company) => {
+              const isBlocked = company.status === "BLOCKED"
+              return (
+                <Card
+                  key={company.id}
+                  onClick={() => !isBlocked ? handleCompanyClick(company.id) : setBlockedModalOpenControl(true)}
+                  className={`p-6 backdrop-blur border transition-all duration-300 group rounded-3xl ${isBlocked
+                    ? "bg-red-50/50 border-red-200 cursor-pointer"
+                    : "bg-white/80 border-slate-100 hover:shadow-xl hover:shadow-emerald-900/5 hover:border-emerald-200 cursor-pointer"
+                    }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 rounded-2xl overflow-hidden border border-slate-100 shadow-sm shrink-0">
+                        <img
+                          src={company.imageUrl || "/placeholder-company.png"}
+                          alt={company.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+
+                      <div>
+                        <h4 className={`font-bold text-lg leading-tight transition-colors ${isBlocked ? "text-red-900" : "text-slate-900 group-hover:text-emerald-700"}`}>
+                          {company.name}
+                        </h4>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <Badge variant="secondary" className={`${isBlocked ? "bg-red-100 text-red-700" : "bg-emerald-50 text-emerald-700"} border-none px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider`}>
+                            {isBlocked ? "BLOQUEADA" : company.role}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className={`p-2 rounded-xl transition-all ${isBlocked ? "bg-red-50 text-red-300" : "bg-slate-50 text-slate-300 group-hover:bg-emerald-100 group-hover:text-emerald-600"}`}>
+                      <ArrowRight className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-8 mt-8 pt-6 border-t border-slate-50">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Funcionários</p>
+                      <p className="text-xl font-bold text-slate-800">
+                        {company.totalEmployees || 0}
+                      </p>
                     </div>
 
                     <div>
-                      <h4 className="font-bold text-slate-900 text-lg leading-tight group-hover:text-emerald-700 transition-colors">
-                        {company.name}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-none px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                          {company.role}
-                        </Badge>
-                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Documentos</p>
+                      <p className="text-xl font-bold text-slate-800">
+                        {company.totalDocuments || 0}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="p-2 rounded-xl bg-slate-50 text-slate-300 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-all">
-                    <ArrowRight className="w-5 h-5" />
-                  </div>
-                </div>
-
-                <div className="flex gap-8 mt-8 pt-6 border-t border-slate-50">
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Funcionários</p>
-                    <p className="text-xl font-bold text-slate-800">
-                      {company.totalEmployees || 0}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Documentos</p>
-                    <p className="text-xl font-bold text-slate-800">
-                      {company.totalDocuments || 0}
-                    </p>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              )
+            })}
           </div>
         )}
       </main>
+
+      <Dialog open={blockedModalOpenControl} onOpenChange={setBlockedModalOpenControl}>
+        <DialogContent className="sm:max-w-md text-center p-8 rounded-3xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 mb-2">
+            <ShieldAlert className="h-8 w-8 text-red-600" />
+          </div>
+          <DialogTitle className="text-2xl font-bold text-slate-900 mb-1 mt-2">Empresa Bloqueada</DialogTitle>
+          <DialogDescription className="text-slate-500 text-base mb-6">
+            O acesso a esta empresa foi temporariamente bloqueado. Para regularizar a situação ou obter mais detalhes, por favor, entre em contato com nosso suporte financeiro.
+          </DialogDescription>
+          
+          <div className="flex flex-col gap-3">
+            <a 
+              href="https://wa.me/5511999999999" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="w-full"
+            >
+              <Button className="w-full bg-[#25D366] hover:bg-[#1fbc5a] text-white rounded-xl h-11 font-bold text-base gap-2 cursor-pointer transition-all hover:scale-[1.02]">
+                <MessageCircle className="w-5 h-5" />
+                Falar com o Suporte
+              </Button>
+            </a>
+            <Button 
+              variant="outline" 
+              onClick={() => setBlockedModalOpenControl(false)}
+              className="w-full rounded-xl h-11 font-bold cursor-pointer"
+            >
+              Voltar ao Início
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

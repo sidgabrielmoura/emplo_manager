@@ -103,19 +103,21 @@ export default function SettingsPage() {
           <p className="text-muted-foreground mt-1">Gerencie sua conta e as preferências da sua empresa</p>
         </div>
 
-        <Link href="/settings/company" className="block w-full">
-          <Card className="hover:border-emerald-500 hover:bg-emerald-50/50 transition-all cursor-pointer">
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="p-3 bg-emerald-100 rounded-xl">
-                <Building2 className="w-6 h-6 text-emerald-600" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-800">Configurações da Empresa</h3>
-                <p className="text-sm text-slate-500">Gerenciar informações básicas, logo e documentos (PGR, PCMSO, etc)</p>
-              </div>
-            </CardContent>
-          </Card>
-        </Link>
+        {user?.role !== "RH" && (
+          <Link href="/settings/company" className="block w-full">
+            <Card className="hover:border-emerald-500 hover:bg-emerald-50/50 transition-all cursor-pointer">
+              <CardContent className="flex items-center gap-4 p-6">
+                <div className="p-3 bg-emerald-100 rounded-xl">
+                  <Building2 className="w-6 h-6 text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Configurações da Empresa</h3>
+                  <p className="text-sm text-slate-500">Gerenciar informações básicas, logo e documentos (PGR, PCMSO, etc)</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        )}
 
         <Tabs defaultValue="profile" className="w-full">
           <TabsList>
@@ -138,7 +140,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="space-y-2 w-full">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                    <Input id="email" type="email" readOnly={user?.role === "RH"} value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                 </div>
                 <Button disabled={loading} className="cursor-pointer" onClick={handleUpdateProfile}>

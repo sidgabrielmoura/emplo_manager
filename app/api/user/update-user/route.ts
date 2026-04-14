@@ -18,10 +18,11 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 })
         }
 
-        const isSelfUpdate = userSession.id === user_id
+        const isSuperAdmin = userSession.role === "SUPERADMIN"
         const isCompanyAdmin = userSession.role === "ADMIN" && userSession.companyId === targetUser.companyId
+        const isSelf = userSession.id === user_id
 
-        if (!isSelfUpdate && !isCompanyAdmin) {
+        if (!isSelf && !isCompanyAdmin && !isSuperAdmin) {
             return forbiddenResponse()
         }
 
@@ -57,7 +58,7 @@ export async function PUT(req: NextRequest) {
             data: {
                 ...(name && { name }),
                 ...(email && { email }),
-                ...(role && isCompanyAdmin && { role }),
+                ...(role && (isCompanyAdmin || isSuperAdmin) && { role }),
                 ...(hashedPassword && { password: hashedPassword })
             }
         })

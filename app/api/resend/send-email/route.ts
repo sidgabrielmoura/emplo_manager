@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
         if (!userId) return unauthorizedResponse()
 
         const { data, error } = await resend.emails.send({
-            from: 'onboarding@resend.dev',
+            from: 'ETX Gestão <onboarding@resend.dev>',
             to: ['sidgabrielmoura40@gmail.com'],
             subject: 'Hello world',
             html: '<h1>Welcome, John!</h1><p>This is a test email from your local environment.</p>',

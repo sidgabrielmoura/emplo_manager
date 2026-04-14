@@ -7,18 +7,32 @@ import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/status-badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Eye, Briefcase, IdCard, Mail, RotateCw, FileDown, Users } from "lucide-react"
+import { Plus, Search, Eye, Briefcase, IdCard, Mail, RotateCw, FileDown, Users, Loader2 } from "lucide-react"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
-import { getEmployees } from "@/actions/requests"
+import { downloadEmployeeZip, getEmployees } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
 import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
 
 export function EmployeesContent() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
+  const [zipLoadingId, setZipLoadingId] = useState<string | null>(null)
   const useEmployee = useSnapshot(useEmployeesStore)
   const companyStore = useSnapshot(useCompanyStore)
+
+  async function handleDownloadZip(employeeId: string, employeeName: string) {
+    setZipLoadingId(employeeId)
+    try {
+      await downloadEmployeeZip(employeeId, employeeName)
+      toast.success("Download iniciado!")
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao baixar arquivos")
+    } finally {
+      setZipLoadingId(null)
+    }
+  }
 
   const filteredEmployees = useEmployee.employees?.filter((employee) => {
     const matchesStatus = statusFilter === "all" || employee.status === statusFilter
@@ -189,12 +203,13 @@ export function EmployeesContent() {
                   <Button
                     variant="secondary"
                     className="flex-1 gap-2 cursor-pointer rounded-xl h-10 text-xs font-bold bg-slate-50 text-slate-600 hover:bg-slate-100 transition-all"
-                    onClick={() => {
-                      console.log("Baixar documentos:", employee.id)
-                    }}
+                    disabled={zipLoadingId === employee.id}
+                    onClick={() => handleDownloadZip(employee.id, employee.name)}
                   >
-                    <FileDown className="w-4 h-4" />
-                    Arquivos
+                    {zipLoadingId === employee.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <FileDown className="w-4 h-4" />}
+                    Baixar Arquivos
                   </Button>
                 </div>
               </CardContent>

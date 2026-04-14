@@ -4,6 +4,8 @@ import Link from "next/link"
 import { LayoutDashboard, Users, FileText, UserCog, Settings, Book, Building2 } from "lucide-react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
+import { useSnapshot } from "valtio"
+import { useUserStore } from "@/stores/user"
 
 const adminNavigation = [
   { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
@@ -25,6 +27,7 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ onNavItemClick }: AppSidebarProps) {
+  const user = useSnapshot(useUserStore).user
   const pathname = usePathname()
   const isSuperAdminView = pathname.startsWith("/superadmin")
 
@@ -38,6 +41,10 @@ export function AppSidebar({ onNavItemClick }: AppSidebarProps) {
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto w-full">
         {navigation.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + "/")
+          const isRh = user?.role === "RH"
+
+          if (isRh && item.href === "/users") return null
+
           return (
             <Link
               key={item.name}

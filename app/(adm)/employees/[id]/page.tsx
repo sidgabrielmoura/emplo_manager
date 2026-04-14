@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
@@ -67,6 +67,10 @@ export default function EmployeeProfilePage() {
   })
   const [docIssuedAt, setDocIssuedAt] = useState('')
   const [docExpiresAt, setDocExpiresAt] = useState('')
+  const [trainingIssuedAt, setTrainingIssuedAt] = useState('')
+  const [trainingExpiresAt, setTrainingExpiresAt] = useState('')
+  const [trainingExpire, setTrainingExpire] = useState(false)
+  const [trainingsZipLoading, setTrainingsZipLoading] = useState(false)
 
   useEffect(() => {
     if (!params.id) return
@@ -250,10 +254,15 @@ export default function EmployeeProfilePage() {
       const response = await updateTraining({
         fileUrl: uploaded.url,
         id,
+        issuedAt: trainingIssuedAt || undefined,
+        expiresAt: trainingExpiresAt || undefined,
       }, employee.id)
 
       if (response) {
         toast.success('Treinamento atualizado com sucesso')
+        setTrainingIssuedAt('')
+        setTrainingExpiresAt('')
+        setTrainingExpire(false)
         closeEditDocModal.current?.click()
       }
 
@@ -261,6 +270,19 @@ export default function EmployeeProfilePage() {
       toast.error(error?.response?.data?.error || "Erro ao atualizar treinamento")
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleDownloadTrainingsZip() {
+    if (!employee) return
+    setTrainingsZipLoading(true)
+    try {
+      await downloadTrainingsZip(employee.id, employee.name)
+      toast.success("Download iniciado!")
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao baixar treinamentos")
+    } finally {
+      setTrainingsZipLoading(false)
     }
   }
 
@@ -752,22 +774,129 @@ export default function EmployeeProfilePage() {
 
                             <TableCell className="text-right">
                               {doc.fileUrl ? (
-                                <Link href={doc.fileUrl} target="_blank" rel="noreferrer">
+                                <div className="flex items-center justify-end gap-2">
+                                  <Link href={doc.fileUrl} target="_blank" rel="noreferrer">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2 cursor-pointer"
+                                    >
+                                      <Eye className="w-4 h-4" />
+                                      Ver
+                                    </Button>
+                                  </Link>
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="gap-2 cursor-pointer"
+                                    onClick={() => downloadFile(doc.fileUrl!, `${getPTBRDocuments(doc.type, doc.name)}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
                                   >
-                                    <Eye className="w-4 h-4" />
-                                    Ver Documento
+                                    <Download className="w-4 h-4" />
+                                    Baixar
                                   </Button>
-                                </Link>
+                                  <Dialog>
+                                    <DialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2 cursor-pointer"
+                                        onClick={() => {
+                                          setDocIssuedAt(doc.issuedAt ? new Date(doc.issuedAt).toISOString().split('T')[0] : '')
+                                          setDocExpiresAt(doc.expiresAt ? new Date(doc.expiresAt).toISOString().split('T')[0] : '')
+                                        }}
+                                      >
+                                        <Pencil className="w-4 h-4" />
+                                        Editar
+                                      </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl! w-full">
+                                      <div className="space-y-5">
+                                        <h3 className="text-lg font-semibold">Atualizar documento</h3>
+
+                                        <input
+                                          ref={inputRef}
+                                          type="file"
+                                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                          hidden
+                                          onChange={(e) => handleSelect(e.target.files)}
+                                        />
+
+                                        <div className="flex flex-col gap-2">
+                                          <Button
+                                            variant="outline"
+                                            className="w-fit cursor-pointer"
+                                            onClick={() => inputRef.current?.click()}
+                                          >
+                                            Selecionar arquivo
+                                          </Button>
+
+                                          <p className="text-xs text-muted-foreground">
+                                            Formatos aceitos: PDF, Word, Excel e PowerPoint
+                                          </p>
+                                        </div>
+
+                                        {preview && file && (
+                                          <div className="flex items-center justify-between gap-3 rounded-md border p-2">
+                                            <span className="text-primary truncate">{file.name}</span>
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              className="cursor-pointer text-destructive"
+                                              onClick={() => {
+                                                setFile(null)
+                                                setPreview(null)
+                                              }}
+                                            >
+                                              Remover
+                                            </Button>
+                                          </div>
+                                        )}
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                          <div className="space-y-2">
+                                            <Label>Data de emissão</Label>
+                                            <Input
+                                              type="date"
+                                              value={docIssuedAt}
+                                              onChange={e => setDocIssuedAt(e.target.value)}
+                                            />
+                                          </div>
+                                          <div className="space-y-2">
+                                            <Label>Data de vencimento</Label>
+                                            <Input
+                                              type="date"
+                                              value={docExpiresAt}
+                                              onChange={e => setDocExpiresAt(e.target.value)}
+                                            />
+                                          </div>
+                                        </div>
+
+                                        <div className="flex justify-end gap-2 pt-2">
+                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
+                                          <Button
+                                            className="cursor-pointer gap-2"
+                                            disabled={loading}
+                                            onClick={() => handleUploadImage(doc.id)}
+                                          >
+                                            Salvar alterações
+                                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                          </Button>
+                                          <DialogClose ref={closeEditDocModal} />
+                                        </div>
+                                      </div>
+                                    </DialogContent>
+                                  </Dialog>
+                                </div>
                               ) : (
                                 <Dialog>
                                   <DialogTrigger asChild>
                                     <Button
                                       size="sm"
                                       className="gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        setDocIssuedAt('')
+                                        setDocExpiresAt('')
+                                      }}
                                     >
                                       <Upload className="w-4 h-4" />
                                       Enviar
@@ -777,32 +906,6 @@ export default function EmployeeProfilePage() {
                                     <div className="space-y-5">
                                       <h3 className="text-lg font-semibold">Enviar documento</h3>
 
-                                      <input
-                                        ref={inputRef}
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                        hidden
-                                        onChange={(e) => handleSelect(e.target.files)}
-                                      />
-
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                          <Label>Data de emissão</Label>
-                                          <Input
-                                            type="date"
-                                            value={docIssuedAt}
-                                            onChange={e => setDocIssuedAt(e.target.value)}
-                                          />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Data de vencimento</Label>
-                                          <Input
-                                            type="date"
-                                            value={docExpiresAt}
-                                            onChange={e => setDocExpiresAt(e.target.value)}
-                                          />
-                                        </div>
-                                      </div>
                                       <div className="flex flex-col gap-2">
                                         <Button
                                           variant="outline"
@@ -816,6 +919,14 @@ export default function EmployeeProfilePage() {
                                           Formatos aceitos: PDF, Word, Excel e PowerPoint
                                         </p>
                                       </div>
+
+                                      <input
+                                        ref={inputRef}
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                        hidden
+                                        onChange={(e) => handleSelect(e.target.files)}
+                                      />
 
                                       {preview && file && (
                                         <div className="flex items-center justify-between gap-3 rounded-md border p-2">
@@ -842,6 +953,24 @@ export default function EmployeeProfilePage() {
                                         </div>
                                       )}
 
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                          <Label>Data de emissão</Label>
+                                          <Input
+                                            type="date"
+                                            value={docIssuedAt}
+                                            onChange={e => setDocIssuedAt(e.target.value)}
+                                          />
+                                        </div>
+                                        <div className="space-y-2">
+                                          <Label>Data de vencimento</Label>
+                                          <Input
+                                            type="date"
+                                            value={docExpiresAt}
+                                            onChange={e => setDocExpiresAt(e.target.value)}
+                                          />
+                                        </div>
+                                      </div>
 
                                       <div className="flex justify-end gap-2 pt-2">
                                         <Button
@@ -886,9 +1015,23 @@ export default function EmployeeProfilePage() {
 
           <TabsContent value="trainings" className="mt-6">
             <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white">
-              <CardHeader className="px-6 lg:px-8 py-6 border-b border-slate-50">
-                <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Treinamentos e Especializações</CardTitle>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Controle de capacitação técnica</p>
+              <CardHeader className="px-6 lg:px-8 py-6 border-b border-slate-50 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Treinamentos e Especializações</CardTitle>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Controle de capacitação técnica</p>
+                </div>
+                {trainings && trainings.some((t: any) => t.fileUrl) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 cursor-pointer"
+                    disabled={trainingsZipLoading}
+                    onClick={handleDownloadTrainingsZip}
+                  >
+                    {trainingsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Baixar todos
+                  </Button>
+                )}
               </CardHeader>
 
               <CardContent className="p-0 px-8">
@@ -982,9 +1125,27 @@ export default function EmployeeProfilePage() {
                                       Ver
                                     </Button>
                                   </Link>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-2 cursor-pointer"
+                                    onClick={() => downloadFile(training.fileUrl!, `${getPTBRDocuments(training.type)}.${training.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    Baixar
+                                  </Button>
                                   <Dialog>
                                     <DialogTrigger asChild>
-                                      <Button variant="outline" size="sm" className="gap-2 cursor-pointer">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2 cursor-pointer"
+                                        onClick={() => {
+                                          setTrainingIssuedAt(training.issuedAt ? new Date(training.issuedAt).toISOString().split('T')[0] : '')
+                                          setTrainingExpiresAt(training.expiresAt ? new Date(training.expiresAt).toISOString().split('T')[0] : '')
+                                          setTrainingExpire(!!training.expiresAt)
+                                        }}
+                                      >
                                         <Pencil className="w-4 h-4" />
                                         Editar
                                       </Button>
@@ -992,7 +1153,7 @@ export default function EmployeeProfilePage() {
                                     <DialogContent className="max-w-2xl! w-full">
                                       <div className="space-y-5">
                                         <h3 className="text-lg font-semibold">Atualizar treinamento</h3>
-                                        {/* Reuse the same form as below */}
+
                                         <input
                                           ref={inputRef}
                                           type="file"
@@ -1031,9 +1192,38 @@ export default function EmployeeProfilePage() {
                                           </div>
                                         )}
 
+                                        <section>
+                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                            <div className="space-y-1">
+                                              <label className="text-sm font-medium">Data de emissão</label>
+                                              <Input
+                                                type="date"
+                                                value={trainingIssuedAt}
+                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                onChange={(e) => setTrainingIssuedAt(e.target.value)}
+                                              />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                              <label className="text-sm font-medium">Data de vencimento</label>
+                                              <Input
+                                                disabled={!trainingExpire}
+                                                type="date"
+                                                value={trainingExpiresAt}
+                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                onChange={(e) => setTrainingExpiresAt(e.target.value)}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <div className="flex items-center gap-3 mt-5 justify-end">
+                                            <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
+                                            <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
+                                          </div>
+                                        </section>
 
                                         <div className="flex justify-end gap-2 pt-2">
-                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); }}>Limpar</Button>
+                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
                                           <Button
                                             className="cursor-pointer gap-2"
                                             disabled={loading}
@@ -1054,6 +1244,11 @@ export default function EmployeeProfilePage() {
                                     <Button
                                       size="sm"
                                       className="gap-2 cursor-pointer"
+                                      onClick={() => {
+                                        setTrainingIssuedAt('')
+                                        setTrainingExpiresAt('')
+                                        setTrainingExpire(false)
+                                      }}
                                     >
                                       <Upload className="w-4 h-4" />
                                       Enviar
@@ -1102,6 +1297,33 @@ export default function EmployeeProfilePage() {
                                         </div>
                                       )}
 
+                                      <section>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                          <div className="space-y-1">
+                                            <label className="text-sm font-medium">Data de emissão</label>
+                                            <Input
+                                              type="date"
+                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                              onChange={(e) => setTrainingIssuedAt(e.target.value)}
+                                            />
+                                          </div>
+
+                                          <div className="space-y-1">
+                                            <label className="text-sm font-medium">Data de vencimento</label>
+                                            <Input
+                                              disabled={!trainingExpire}
+                                              type="date"
+                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                              onChange={(e) => setTrainingExpiresAt(e.target.value)}
+                                            />
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 mt-5 justify-end">
+                                          <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
+                                          <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
+                                        </div>
+                                      </section>
 
                                       <div className="flex justify-end gap-2 pt-2">
                                         <Button
@@ -1110,6 +1332,8 @@ export default function EmployeeProfilePage() {
                                           onClick={() => {
                                             setFile(null)
                                             setPreview(null)
+                                            setTrainingIssuedAt('')
+                                            setTrainingExpiresAt('')
                                           }}
                                         >
                                           Limpar

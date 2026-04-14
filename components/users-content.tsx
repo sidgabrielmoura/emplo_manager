@@ -79,7 +79,7 @@ export function UsersContent() {
       setOpen(false)
     } catch (error: any) {
       console.error("Error creating user:", error)
-      toast.error(error.reponse.data.error)
+      toast.error(error.response.data.error)
     } finally {
       setLoading(false)
     }
