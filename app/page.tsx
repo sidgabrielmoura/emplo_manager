@@ -1,5 +1,6 @@
 "use client"
 
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Building2,
   Users,
@@ -30,16 +31,10 @@ import Image from "next/image"
 
 export default function HomePage() {
   const router = useRouter()
-  const { companies } = useSnapshot(useCompanyStore)
+  const { companies, loading: companiesLoading } = useSnapshot(useCompanyStore)
   const { user_token, user } = useSnapshot(useUserStore)
   const [loading, setLoading] = useState(false)
   const [blockedModalOpenControl, setBlockedModalOpenControl] = useState(false)
-  const [open, setOpen] = useState(false)
-
-  const [form, setForm] = useState({
-    name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', image_url: ''
-  })
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!user_token) return
@@ -49,42 +44,6 @@ export default function HomePage() {
   const handleCompanyClick = (companyId: string) => {
     router.push(`/dashboard`)
     localStorage.setItem('company_id', companyId)
-  }
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      setLoading(true)
-      try {
-        const uploaded: any = await uploadImage(file)
-        setForm(prev => ({ ...prev, image_url: uploaded.url }))
-        toast.success("Logo adicionada com sucesso!")
-      } catch (error) {
-        toast.error("Erro ao enviar a imagem.")
-      } finally {
-        setLoading(false)
-      }
-    }
-  }
-
-  const handleCreate = async () => {
-    if (!form.name || !form.cnpj) {
-      toast.warning("Nome e CNPJ são obrigatórios.")
-      return
-    }
-
-    setLoading(true)
-    try {
-      await createCompany({ ...form, userId: user!.id })
-      toast.success("Empresa criada com sucesso!")
-      setOpen(false)
-      if (user_token) GetCompanies(user_token)
-      setForm({ name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', image_url: '' })
-    } catch (error) {
-      toast.error("Erro ao criar a empresa.")
-    } finally {
-      setLoading(false)
-    }
   }
 
   const handleLogout = async () => {
@@ -122,33 +81,47 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6 mb-12">
-          <MetricCard
-            label="Empresas"
-            value={companies.length}
-            icon={<Building2 className="w-5 h-5 text-emerald-600" />}
-            bg="bg-emerald-50"
-          />
+          {companiesLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <Card key={i} className="p-5 lg:p-6 bg-white border border-slate-100 rounded-4xl flex items-center gap-4">
+                <Skeleton className="h-14 w-14 rounded-3xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-8 w-12" />
+                </div>
+              </Card>
+            ))
+          ) : (
+            <>
+              <MetricCard
+                label="Empresas"
+                value={companies.length}
+                icon={<Building2 className="w-5 h-5 text-emerald-600" />}
+                bg="bg-emerald-50"
+              />
 
-          <MetricCard
-            label="Funcionários"
-            value={companies.reduce((acc, c) => acc + (c.totalEmployees || 0), 0)}
-            icon={<Users className="w-5 h-5 text-emerald-600" />}
-            bg="bg-emerald-50"
-          />
+              <MetricCard
+                label="Funcionários"
+                value={companies.reduce((acc, c) => acc + (c.totalEmployees || 0), 0)}
+                icon={<Users className="w-5 h-5 text-emerald-600" />}
+                bg="bg-emerald-50"
+              />
 
-          <MetricCard
-            label="Documentos"
-            value={companies.reduce((acc, c) => acc + (c.totalDocuments || 0), 0)}
-            icon={<FileText className="w-5 h-5 text-emerald-600" />}
-            bg="bg-emerald-50"
-          />
+              <MetricCard
+                label="Documentos"
+                value={companies.reduce((acc, c) => acc + (c.totalDocuments || 0), 0)}
+                icon={<FileText className="w-5 h-5 text-emerald-600" />}
+                bg="bg-emerald-50"
+              />
 
-          <MetricCard
-            label="Acessos Ativos"
-            value={companies.filter((c) => c.role === "ADMIN").length}
-            icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
-            bg="bg-emerald-50"
-          />
+              <MetricCard
+                label="Acessos Ativos"
+                value={companies.filter((c) => c.role === "ADMIN").length}
+                icon={<CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                bg="bg-emerald-50"
+              />
+            </>
+          )}
         </div>
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
@@ -166,7 +139,31 @@ export default function HomePage() {
           )}
         </div>
 
-        {companies.length === 0 ? (
+        {companiesLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="p-6 bg-white border border-slate-100 rounded-3xl space-y-6">
+                <div className="flex items-center gap-4">
+                  <Skeleton className="size-14 rounded-2xl" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-32" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+                <div className="flex gap-8 pt-6 border-t border-slate-50">
+                  <div className="space-y-2">
+                    <Skeleton className="h-2 w-16" />
+                    <Skeleton className="h-6 w-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-2 w-16" />
+                    <Skeleton className="h-6 w-8" />
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : companies.length === 0 ? (
           <Card className="p-12 lg:p-20 text-center bg-white/80 backdrop-blur border border-slate-100 rounded-3xl shadow-sm">
             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto mb-6">
               <Building2 className="w-8 h-8 text-slate-300" />
@@ -247,11 +244,11 @@ export default function HomePage() {
           <DialogDescription className="text-slate-500 text-base mb-6">
             O acesso a esta empresa foi temporariamente bloqueado. Para regularizar a situação ou obter mais detalhes, por favor, entre em contato com nosso suporte financeiro.
           </DialogDescription>
-          
+
           <div className="flex flex-col gap-3">
-            <a 
-              href="https://wa.me/5511999999999" 
-              target="_blank" 
+            <a
+              href="https://wa.me/5511999999999"
+              target="_blank"
               rel="noopener noreferrer"
               className="w-full"
             >
@@ -260,8 +257,8 @@ export default function HomePage() {
                 Falar com o Suporte
               </Button>
             </a>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setBlockedModalOpenControl(false)}
               className="w-full rounded-xl h-11 font-bold cursor-pointer"
             >

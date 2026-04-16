@@ -15,5 +15,6 @@ type companyInterface = Prisma.CompanyGetPayload<{ select: { name: true, imageUr
 
 export const useCompanyStore = proxy({
   companies: [] as CompanyDashboardDTO[],
+  loading: true,
   company_selected: null as companyInterface | null
 })

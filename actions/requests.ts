@@ -35,10 +35,13 @@ export async function GetCompanies(userId: string) {
         )
 
         useCompanyStore.companies = data
+        useCompanyStore.loading = false
 
         return data
     } catch (error) {
         console.log(error)
+    } finally {
+        useCompanyStore.loading = false
     }
 }
 

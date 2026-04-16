@@ -102,7 +102,7 @@ export function CostCentersContent() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
         {!costCenters ? (
           Array.from({ length: 6 }).map((_, i) => (
             <Card key={i} className="border-slate-100 bg-white overflow-hidden rounded-3xl">

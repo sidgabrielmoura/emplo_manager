@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
@@ -78,12 +78,18 @@ export default function EmployeeProfilePage() {
   useEffect(() => {
     if (!params.id) return
 
+    const companyId = localStorage.getItem('company_id')
+
     setPageLoading(true)
     showEmployee(params.id)
     setDocsLoading(true)
     getDocsOfEmployee(params.id).finally(() => setDocsLoading(false))
     setTrainingsLoading(true)
     getTrainings(params.id).finally(() => setTrainingsLoading(false))
+
+    if (companyId) {
+      getCostCenters(companyId)
+    }
   }, [params.id])
 
   useEffect(() => {
