@@ -188,6 +188,7 @@ model Company {
   disabledDocuments        String[]                  @default([])
   standardDocumentValidity Json?
   standardDocumentLabels   Json?
+  costCenters              CostCenter[]
 }
 
 model Employee {
@@ -216,11 +217,14 @@ model Employee {
   dismissedAt  DateTime?
 
   passportEmissions PassportEmission[]
+  costCenter        CostCenter?        @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  costCenterId      String?
 
   @@unique([cpf])
   @@unique([email])
   @@index([companyId])
   @@index([status])
+  @@index([costCenterId])
 }
 
 model EmployeeContact {
@@ -360,5 +364,19 @@ model CompanyRequiredDocument {
   updatedAt    DateTime       @updatedAt
 
   @@unique([companyId, name, target])
+  @@index([companyId])
+}
+
+model CostCenter {
+  id        String     @id @default(uuid())
+  name      String
+  city      String?
+  state     String?
+  companyId String
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
   @@index([companyId])
 }

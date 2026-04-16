@@ -57,7 +57,7 @@ export function EmployeesContent() {
           </p>
         </div>
         <Link href={'/add-employee'} className="w-full sm:w-auto">
-          <Button className="w-full sm:w-auto gap-2 cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-lg shadow-emerald-100 px-6 h-11 font-bold">
+          <Button className="w-full sm:w-auto gap-2 cursor-pointer text-white rounded-xl shadow-lg shadow-emerald-100 px-6 h-11 font-bold">
             <Plus className="w-4 h-4" />
             Novo Funcionário
           </Button>

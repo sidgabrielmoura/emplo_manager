@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { LayoutDashboard, Users, FileText, UserCog, Settings, Book, Building2 } from "lucide-react"
+import { LayoutDashboard, Users, FileText, UserCog, Settings, Book, Building2, DollarSign } from "lucide-react"
 import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useSnapshot } from "valtio"
@@ -10,8 +10,9 @@ import { useUserStore } from "@/stores/user"
 const adminNavigation = [
   { name: "Painel", href: "/dashboard", icon: LayoutDashboard },
   { name: "Funcionários", href: "/employees", icon: Users },
+  { name: "Perfil de Qualificação", href: "/passport", icon: Book },
   { name: "Documentos", href: "/documents", icon: FileText },
-  { name: "Perfil de qualificação", href: "/passport", icon: Book },
+  { name: "Centros de Custo", href: "/cost-centers", icon: DollarSign },
   { name: "Usuários e Funções", href: "/users", icon: UserCog },
   { name: "Configurações", href: "/settings", icon: Settings },
 ]

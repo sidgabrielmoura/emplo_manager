@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
                 address: true,
                 contract: true,
                 trainings: true,
-                documents: true
+                documents: true,
+                costCenter: true
             }
         })
 

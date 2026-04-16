@@ -4,6 +4,7 @@ import { useDocumentStore } from '@/stores/documents'
 import { useEmployeesStore } from '@/stores/employees'
 import { usePassportStore } from '@/stores/passport'
 import { useUserStore } from '@/stores/user'
+import { useCostCentersStore } from '@/stores/cost-centers'
 import axios from 'axios'
 
 const base_url = process.env.NEXT_PUBLIC_API_URL
@@ -18,6 +19,8 @@ export function resetAllCompanyStores() {
     useEmployeesStore.employee_trainings = null
     useEmployeesStore.show_employee = null
     usePassportStore.emissions = null
+    useCostCentersStore.costCenters = null
+    useCostCentersStore.selectedCostCenter = null
 }
 
 export async function GetCompanies(userId: string) {
@@ -1017,4 +1020,81 @@ export async function downloadTrainingsZip(employeeId: string, employeeName: str
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+}
+
+export async function getCostCenters(companyId: string) {
+    try {
+        const { data } = await axios.post(
+            '/cost-centers',
+            { companyId, action: 'list' },
+            { baseURL: base_url }
+        )
+        useCostCentersStore.costCenters = data
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function createCostCenter(payload: {
+    name: string,
+    city?: string,
+    state?: string,
+    companyId: string
+}) {
+    try {
+        const { data } = await axios.post(
+            '/cost-centers',
+            payload,
+            { baseURL: base_url }
+        )
+        await getCostCenters(payload.companyId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function updateCostCenter(id: string, payload: {
+    name: string,
+    city?: string,
+    state?: string,
+    companyId: string
+}) {
+    try {
+        const { data } = await axios.put(
+            `/cost-centers/${id}`,
+            payload,
+            { baseURL: base_url }
+        )
+        await getCostCenters(payload.companyId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function deleteCostCenter(id: string, companyId: string) {
+    try {
+        const { data } = await axios.delete(
+            `/cost-centers/${id}`,
+            { baseURL: base_url }
+        )
+        await getCostCenters(companyId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function getCostCenterDetails(id: string) {
+    try {
+        const { data } = await axios.get(
+            `/cost-centers/${id}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
 }

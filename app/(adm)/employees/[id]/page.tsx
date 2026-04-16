@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye } from "lucide-react"
+import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -19,6 +19,7 @@ import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/
 import { toast } from "sonner"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
+import { useCostCentersStore } from "@/stores/cost-centers"
 import { Switch } from "@/components/ui/switch"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
@@ -31,6 +32,7 @@ export default function EmployeeProfilePage() {
   const params = useParams<{ id: string }>()
   const documents = useSnapshot(useEmployeesStore).employee_documents
   const trainings = useSnapshot(useEmployeesStore).employee_trainings
+  const costCenters = useSnapshot(useCostCentersStore).costCenters
   const [pageLoading, setPageLoading] = useState(true)
   const closeUpdateEmployeeSheet = useRef<HTMLButtonElement>(null)
   const [docsLoading, setDocsLoading] = useState(true)
@@ -63,7 +65,8 @@ export default function EmployeeProfilePage() {
     },
     contactPhone: '',
     emergencyContact: '',
-    dismissedAt: ''
+    dismissedAt: '',
+    costCenterId: ''
   })
   const [docIssuedAt, setDocIssuedAt] = useState('')
   const [docExpiresAt, setDocExpiresAt] = useState('')
@@ -108,7 +111,8 @@ export default function EmployeeProfilePage() {
       },
       contactPhone: employee.contact?.phone || '',
       emergencyContact: employee.contact?.emergencyContact || '',
-      dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : ''
+      dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : '',
+      costCenterId: employee.costCenterId || ''
     })
   }, [employee, params.id])
 
@@ -238,7 +242,6 @@ export default function EmployeeProfilePage() {
   }
 
   const handleUploadTraining = async (id: string) => {
-
     setLoading(true)
     try {
       const uploaded: any = await uploadImage(file!).catch(() => {
@@ -310,8 +313,9 @@ export default function EmployeeProfilePage() {
         address: form.address,
         contactPhone: form.contactPhone,
         emergencyContact: form.emergencyContact,
-        dismissedAt: form.isTerminated ? form.dismissedAt : ''
-      })
+        dismissedAt: form.isTerminated ? form.dismissedAt : '',
+        costCenterId: form.costCenterId || undefined
+      } as any)
 
       toast.success("Funcionário atualizado com sucesso")
       closeUpdateEmployeeSheet.current?.click()
@@ -355,7 +359,14 @@ export default function EmployeeProfilePage() {
                 <div>
                   <h2 className="text-2xl font-black text-slate-900 capitalize tracking-tight">{employee.name}</h2>
                   <div className="flex flex-col items-center lg:items-start gap-2 mt-2">
-                    <StatusBadge status={employee.status} />
+                    <div className="flex items-center gap-3">
+                      <StatusBadge status={employee.status} />
+                      {employee.costCenter && (
+                        <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                          <MapPin className="w-3 h-3" /> {employee.costCenter.name}
+                        </p>
+                      )}
+                    </div>
                     <p className="text-sm font-semibold text-slate-500 uppercase tracking-widest">
                       {employee.position}
                     </p>
@@ -388,7 +399,8 @@ export default function EmployeeProfilePage() {
                       },
                       contactPhone: employee.contact?.phone || '',
                       emergencyContact: employee.contact?.emergencyContact || '',
-                      dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : ''
+                      dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : '',
+                      costCenterId: employee.costCenterId || ''
                     })
                   }} className="cursor-pointer ">
                     <Pencil /> Atualizar
@@ -531,6 +543,28 @@ export default function EmployeeProfilePage() {
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label>Centro de Custo</Label>
+                      <Select
+                        value={form.costCenterId || 'none'}
+                        onValueChange={(value) =>
+                          setForm(prev => ({ ...prev, costCenterId: value === 'none' ? '' : value }))
+                        }
+                      >
+                        <SelectTrigger className="cursor-pointer w-full">
+                          <SelectValue placeholder="Selecione o centro" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Nenhum</SelectItem>
+                          {costCenters?.map((center) => (
+                            <SelectItem key={center.id} value={center.id}>
+                              {center.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <section className="flex flex-col justify-center">

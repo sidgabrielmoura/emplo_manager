@@ -18,10 +18,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 
-import { createEmployee, uploadImage } from "@/actions/requests"
+import { createEmployee, getCostCenters, uploadImage } from "@/actions/requests"
 import { useSnapshot } from "valtio"
 import { useCompanyStore } from "@/stores/company"
+import { useCostCentersStore } from "@/stores/cost-centers"
 import { toast } from "sonner"
+import { useEffect } from "react"
 import { maskCPF, maskPhone, maskRG } from "@/helpers"
 
 function AvatarUpload({
@@ -105,6 +107,15 @@ export default function CreateEmployeeComponent() {
   const [city, setCity] = useState("")
   const [district, setDistrict] = useState("")
   const [complement, setComplement] = useState("")
+  const [costCenterId, setCostCenterId] = useState("")
+
+  const { costCenters } = useSnapshot(useCostCentersStore)
+
+  useEffect(() => {
+    if (company_selected?.id) {
+      getCostCenters(company_selected.id).catch(console.error)
+    }
+  }, [company_selected?.id])
 
   function handlePhoto(file: File | null) {
     if (!file) {
@@ -139,6 +150,7 @@ export default function CreateEmployeeComponent() {
     setCity("")
     setDistrict("")
     setComplement("")
+    setCostCenterId("")
   }
 
   async function handleCreateEmployee() {
@@ -172,8 +184,9 @@ export default function CreateEmployeeComponent() {
         contact,
         emergencyContact,
         admissionDate,
-        contractEndDate: isTemporaryContract ? contractEndDate : undefined
-      })
+        contractEndDate: isTemporaryContract ? contractEndDate : undefined,
+        costCenterId: costCenterId || undefined
+      } as any)
 
       toast.success("Funcionário criado!")
       resetForm()
@@ -277,6 +290,22 @@ export default function CreateEmployeeComponent() {
                 <div className="space-y-1">
                   <Label>Nascimento</Label>
                   <Input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Centro de Custo</Label>
+                  <Select value={costCenterId} onValueChange={setCostCenterId}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Selecione o centro" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {costCenters?.map((center) => (
+                        <SelectItem key={center.id} value={center.id}>
+                          {center.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </CardContent>
