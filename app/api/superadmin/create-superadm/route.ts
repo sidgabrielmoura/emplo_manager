@@ -1,14 +1,14 @@
 import db from "@/lib/prisma"
 import bcrypt from "bcrypt"
 import { NextRequest, NextResponse } from "next/server"
-import { isSuperAdmin, unauthorizedResponse, forbiddenResponse } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
   try {
-    const isSuper = await isSuperAdmin(req)
-    if (!isSuper) return forbiddenResponse()
+    const { name, email, password, security_key } = await req.json()
 
-    const { name, email, password } = await req.json()
+    if (security_key !== process.env.SECURITY_KEY) {
+      return NextResponse.json({ error: "Chave de segurança inválida" }, { status: 401 })
+    }
 
     if (!name || !email || !password) {
       return NextResponse.json({ error: "Dados obrigatórios ausentes" }, { status: 400 })
