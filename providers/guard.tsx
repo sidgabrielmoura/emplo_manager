@@ -11,13 +11,12 @@ export function GuardProvider({ children }: { children: ReactNode }) {
     const router = useRouter()
     const pathname = usePathname()
     const { company_selected } = useSnapshot(useCompanyStore)
-    const { user } = useSnapshot(useUserStore)
+    const userStore = useSnapshot(useUserStore)
     const [isInitialAuthDone, setIsInitialAuthDone] = useState(false)
 
     useEffect(() => {
-        const isSuperAdminRoute = pathname.startsWith("/superadmin")
-
         const checkInitialAuth = async () => {
+            const isSuperAdminRoute = pathname.startsWith("/superadmin")
             try {
                 if (isSuperAdminRoute) {
                     const { superAdminAuth } = await import("@/actions/requests")
@@ -31,34 +30,47 @@ export function GuardProvider({ children }: { children: ReactNode }) {
                 setIsInitialAuthDone(true)
             }
         }
-
         checkInitialAuth()
     }, [])
 
     useEffect(() => {
         if (!isInitialAuthDone) return
 
-        const companyId = localStorage.getItem('company_id')
-        const isSuperAdminRoute = pathname.startsWith("/superadmin")
+        const handleGuarding = async () => {
+            const isSuperAdminRoute = pathname.startsWith("/superadmin")
+            const isLoginRoute = pathname === "/login" || pathname === "/superadmin/login"
 
-        const handleGuarding = () => {
-            if (!user) {
-                if (isSuperAdminRoute) {
-                    if (pathname !== "/superadmin/login") router.push("/superadmin/login")
-                } else {
-                    if (pathname !== "/login") router.push("/login")
+            let currentUser = userStore.user
+            const companyId = localStorage.getItem('company_id')
+
+            if (!currentUser && !isLoginRoute) {
+                try {
+                    if (isSuperAdminRoute) {
+                        const { superAdminAuth } = await import("@/actions/requests")
+                        const res = await superAdminAuth()
+                        currentUser = res.user
+                    } else {
+                        const res = await auth()
+                        currentUser = res.user
+                    }
+                } catch (e) {
+                    currentUser = null
+                }
+            }
+
+            if (!currentUser) {
+                if (!isLoginRoute) {
+                    router.push(isSuperAdminRoute ? "/superadmin/login" : "/login")
                 }
                 return
             }
 
-            if (isSuperAdminRoute) {
-                if (pathname === "/superadmin/login") router.push("/superadmin/dashboard")
-            } else {
-                if (pathname === "/login") {
-                    router.push("/")
-                    return
-                }
+            if (isLoginRoute) {
+                router.push(isSuperAdminRoute ? "/superadmin/dashboard" : "/")
+                return
+            }
 
+            if (!isSuperAdminRoute) {
                 if (pathname === "/") {
                     resetAllCompanyStores()
                 }
@@ -73,7 +85,7 @@ export function GuardProvider({ children }: { children: ReactNode }) {
 
         handleGuarding()
 
-    }, [pathname, user, isInitialAuthDone])
+    }, [pathname, userStore.user, isInitialAuthDone])
 
     return <>{children}</>
 }
