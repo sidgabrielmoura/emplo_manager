@@ -27,7 +27,10 @@ export async function POST(req: NextRequest) {
                 state: true,
                 city: true,
                 responsible: true,
+                status: true,
                 disabledDocuments: true,
+                standardDocumentValidity: true,
+                standardDocumentLabels: true,
                 createdAt: true
             }
         })
