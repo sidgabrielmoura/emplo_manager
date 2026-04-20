@@ -34,7 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const COMPANY_DOCS = [
-  { type: 'CNPJ_SOCIAL_CONTRACT', label: 'Contrato Social ou Cartão CNPJ' },
+  { type: 'CNPJ_SOCIAL_CONTRACT', label: 'Contrato Social' },
   { type: 'PGR_COMPANY', label: 'PGR' },
   { type: 'PCMSO_COMPANY', label: 'PCMSO' },
   { type: 'ALVARA_LOCALIZACAO', label: 'Alvará de localização e Funcionamento' },
