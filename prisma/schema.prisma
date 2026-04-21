@@ -205,6 +205,8 @@ model Employee {
   supervisor   String?
   registration String?
   rotation     RotationEnum?
+  workStart    String?
+  workEnd      String?
   status       EmployeeStatus   @default(ACTIVE)
   contract     Contract?
   contact      EmployeeContact?

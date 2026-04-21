@@ -430,6 +430,8 @@ export async function updateEmployeeData(employee_id: string, payload: {
     contactPhone?: string,
     emergencyContact?: string,
     dismissedAt?: string,
+    workStart?: string,
+    workEnd?: string,
 }) {
     try {
         const { data } = await axios.put(

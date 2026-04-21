@@ -38,8 +38,10 @@ export async function POST(req: NextRequest) {
                 image: body.image,
                 position: body.position,
                 rotation: body.rotation,
+                workStart: body.workStart,
+                workEnd: body.workEnd,
                 birthDate: new Date(body.birthDate),
-
+ 
                 companyId: body.companyId,
 
                 contact: {

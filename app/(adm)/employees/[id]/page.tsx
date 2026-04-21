@@ -26,6 +26,7 @@ import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger 
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getPTBRDocuments } from "@/lib/constants/documents"
+import { maskPhone } from "@/helpers"
 
 export default function EmployeeProfilePage() {
   const employee = useSnapshot(useEmployeesStore).show_employee
@@ -66,7 +67,9 @@ export default function EmployeeProfilePage() {
     contactPhone: '',
     emergencyContact: '',
     dismissedAt: '',
-    costCenterId: ''
+    costCenterId: '',
+    workStart: '',
+    workEnd: ''
   })
   const [docIssuedAt, setDocIssuedAt] = useState('')
   const [docExpiresAt, setDocExpiresAt] = useState('')
@@ -118,7 +121,9 @@ export default function EmployeeProfilePage() {
       contactPhone: employee.contact?.phone || '',
       emergencyContact: employee.contact?.emergencyContact || '',
       dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : '',
-      costCenterId: employee.costCenterId || ''
+      costCenterId: employee.costCenterId || '',
+      workStart: employee.workStart || '',
+      workEnd: employee.workEnd || ''
     })
   }, [employee, params.id])
 
@@ -320,7 +325,9 @@ export default function EmployeeProfilePage() {
         contactPhone: form.contactPhone,
         emergencyContact: form.emergencyContact,
         dismissedAt: form.isTerminated ? form.dismissedAt : '',
-        costCenterId: form.costCenterId || undefined
+        costCenterId: form.costCenterId || undefined,
+        workStart: form.workStart,
+        workEnd: form.workEnd
       } as any)
 
       toast.success("Funcionário atualizado com sucesso")
@@ -406,7 +413,9 @@ export default function EmployeeProfilePage() {
                       contactPhone: employee.contact?.phone || '',
                       emergencyContact: employee.contact?.emergencyContact || '',
                       dismissedAt: employee.dismissedAt ? new Date(employee.dismissedAt).toISOString().split('T')[0] : '',
-                      costCenterId: employee.costCenterId || ''
+                      costCenterId: employee.costCenterId || '',
+                      workStart: employee.workStart || '',
+                      workEnd: employee.workEnd || ''
                     })
                   }} className="cursor-pointer ">
                     <Pencil /> Atualizar
@@ -512,27 +521,27 @@ export default function EmployeeProfilePage() {
                       />
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="space-y-1 flex-1">
-                        <Label>Turno</Label>
-                        <Select
-                          value={form.rotation || ''}
-                          onValueChange={(value) =>
-                            setForm(prev => ({ ...prev, rotation: value as any }))
-                          }
-                        >
-                          <SelectTrigger className="cursor-pointer w-full">
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="MORNING">Manhã</SelectItem>
-                            <SelectItem value="AFTERNOON">Tarde</SelectItem>
-                            <SelectItem value="NIGHT">Noite</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label>Início do expediente</Label>
+                        <Input
+                          type="time"
+                          value={form.workStart}
+                          onChange={(e) => setForm(prev => ({ ...prev, workStart: e.target.value }))}
+                        />
                       </div>
 
-                      <div className="space-y-1 flex-1">
+                      <div className="space-y-1">
+                        <Label>Fim do expediente</Label>
+                        <Input
+                          type="time"
+                          value={form.workEnd}
+                          onChange={(e) => setForm(prev => ({ ...prev, workEnd: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
                         <Label>Sexo</Label>
                         <Select
                           value={form.gender}
@@ -549,28 +558,28 @@ export default function EmployeeProfilePage() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
 
-                    <div className="space-y-1">
-                      <Label>Centro de Custo</Label>
-                      <Select
-                        value={form.costCenterId || 'none'}
-                        onValueChange={(value) =>
-                          setForm(prev => ({ ...prev, costCenterId: value === 'none' ? '' : value }))
-                        }
-                      >
-                        <SelectTrigger className="cursor-pointer w-full">
-                          <SelectValue placeholder="Selecione o centro" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Nenhum</SelectItem>
-                          {costCenters?.map((center) => (
-                            <SelectItem key={center.id} value={center.id}>
-                              {center.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="space-y-1">
+                        <Label>Centro de Custo</Label>
+                        <Select
+                          value={form.costCenterId || 'none'}
+                          onValueChange={(value) =>
+                            setForm(prev => ({ ...prev, costCenterId: value === 'none' ? '' : value }))
+                          }
+                        >
+                          <SelectTrigger className="cursor-pointer w-full">
+                            <SelectValue placeholder="Selecione o centro" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Nenhum</SelectItem>
+                            {costCenters?.map((center) => (
+                              <SelectItem key={center.id} value={center.id}>
+                                {center.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <section className="flex flex-col justify-center">
@@ -596,9 +605,9 @@ export default function EmployeeProfilePage() {
                       <Label>Matrícula</Label>
                       <Input value={form.registration} onChange={e => setForm(prev => ({ ...prev, registration: e.target.value }))} />
                       <Label>Telefone</Label>
-                      <Input value={form.contactPhone} onChange={e => setForm(prev => ({ ...prev, contactPhone: e.target.value }))} />
+                      <Input value={maskPhone(form.contactPhone)} onChange={(e) => setForm(prev => ({ ...prev, contactPhone: e.target.value }))} />
                       <Label>Contato de Emergência</Label>
-                      <Input value={form.emergencyContact} onChange={e => setForm(prev => ({ ...prev, emergencyContact: e.target.value }))} />
+                      <Input value={maskPhone(form.emergencyContact)} onChange={(e) => setForm(prev => ({ ...prev, emergencyContact: e.target.value }))} />
                       <Label>CEP</Label>
                       <Input value={form.address.cep} onChange={e => setForm(prev => ({ ...prev, address: { ...prev.address, cep: e.target.value } }))} />
                       <Label>Rua</Label>
@@ -648,10 +657,11 @@ export default function EmployeeProfilePage() {
               </div>
 
               <div className="flex justify-between border-b pb-2">
-                <span className="text-muted-foreground">Turno</span>
+                <span className="text-muted-foreground">Horário de Trabalho</span>
                 <span className="font-medium">
-                  {employee.rotation === "MORNING" ? "Manhã" :
-                    employee.rotation === "AFTERNOON" ? "Tarde" : "Noite"}
+                  {employee.workStart && employee.workEnd
+                    ? `${employee.workStart} - ${employee.workEnd}`
+                    : "—"}
                 </span>
               </div>
 
@@ -674,12 +684,12 @@ export default function EmployeeProfilePage() {
 
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Telefone</span>
-                <span className="font-medium">{employee.contact?.phone || "—"}</span>
+                <span className="font-medium">{maskPhone(employee.contact?.phone || "")}</span>
               </div>
 
               <div className="flex justify-between border-b pb-2">
                 <span className="text-muted-foreground">Contato de Emergência</span>
-                <span className="font-medium">{employee.contact?.emergencyContact || "—"}</span>
+                <span className="font-medium">{maskPhone(employee.contact?.emergencyContact || "")}</span>
               </div>
 
               {employee.address && (
@@ -1322,7 +1332,7 @@ export default function EmployeeProfilePage() {
 
                                       {preview && file && (
                                         <div className="flex items-center justify-between gap-3 rounded-md border p-2">
-                                          <span className="text-primary truncate">{file.name}</span>
+                                          <span className="text-primary line-clamp-1">{file.name}</span>
                                           <Button
                                             size="sm"
                                             variant="ghost"

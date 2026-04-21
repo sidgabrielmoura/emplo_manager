@@ -17,19 +17,22 @@ export async function POST(req: NextRequest) {
 
         const employee = await db.employee.findUnique({
             where: { id: employeeId },
-            select: { companyId: true }
+            select: { 
+                companyId: true,
+                company: { select: { disabledDocuments: true } }
+            }
         })
-
+ 
         if (!employee) {
             return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
         }
-
+ 
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
-
+ 
         // Update expired statuses for the company before fetching
         await updateExpiredStatuses(employee.companyId)
-
+ 
         const [trainings, requirements] = await Promise.all([
             db.training.findMany({
                 where: {
@@ -48,10 +51,14 @@ export async function POST(req: NextRequest) {
                 }
             })
         ])
-
+ 
         // 1. Filter real trainings to exclude orphans
+        // and also filter out standard trainings that were disabled by the company
         const activeRealTrainings = trainings.filter(t => {
-            if (t.type !== "CUSTOM") return true;
+            if (t.type !== "CUSTOM") {
+                const disabledDocs = (employee.company.disabledDocuments as string[]) || []
+                return !disabledDocs.includes(t.type)
+            }
             return requirements.some(req => req.name === t.name);
         });
 

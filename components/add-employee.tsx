@@ -92,6 +92,8 @@ export default function CreateEmployeeComponent() {
   const [position, setPosition] = useState("")
   const [gender, setGender] = useState<"MALE" | "FEMALE" | "">("")
   const [rotation, setRotation] = useState<"MORNING" | "AFTERNOON" | "NIGHT" | "">("")
+  const [workStart, setWorkStart] = useState("")
+  const [workEnd, setWorkEnd] = useState("")
   const [birthDate, setBirthDate] = useState("")
 
   const [contact, setContact] = useState("")
@@ -138,6 +140,8 @@ export default function CreateEmployeeComponent() {
     setPosition("")
     setGender("")
     setRotation("")
+    setWorkStart("")
+    setWorkEnd("")
     setBirthDate("")
     setContact("")
     setEmergencyContact("")
@@ -173,6 +177,8 @@ export default function CreateEmployeeComponent() {
         image: imageUrl,
         position,
         rotation: rotation || undefined,
+        workStart: workStart || undefined,
+        workEnd: workEnd || undefined,
         birthDate,
         companyId: company_selected?.id || "",
         cep,
@@ -276,15 +282,13 @@ export default function CreateEmployeeComponent() {
                 </div>
 
                 <div className="space-y-1">
-                  <Label>Turno</Label>
-                  <Select value={rotation} onValueChange={(v) => setRotation(v as any)}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MORNING">Manhã</SelectItem>
-                      <SelectItem value="AFTERNOON">Tarde</SelectItem>
-                      <SelectItem value="NIGHT">Noite</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Label>Início do expediente</Label>
+                  <Input type="time" value={workStart} onChange={(e) => setWorkStart(e.target.value)} />
+                </div>
+
+                <div className="space-y-1">
+                  <Label>Fim do expediente</Label>
+                  <Input type="time" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} />
                 </div>
 
                 <div className="space-y-1">

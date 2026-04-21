@@ -39,8 +39,12 @@ export async function POST(req: NextRequest) {
         ])
 
         // 1. Filter real documents to exclude orphans (CUSTOM documents without active requirement)
+        // and also filter out standard documents that were disabled by the company
         const activeRealDocs = documents.filter(doc => {
-            if (doc.type !== "CUSTOM") return true;
+            if (doc.type !== "CUSTOM") {
+                const disabledDocs = (employee.company.disabledDocuments as string[]) || []
+                return !disabledDocs.includes(doc.type)
+            }
             return requirements.some(req => req.name === doc.name);
         });
 
