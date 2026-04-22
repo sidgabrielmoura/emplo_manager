@@ -52,14 +52,14 @@ export async function calculateDocumentDates(params: {
         });
         validityDays = req?.validityDays || null;
     } else if (params.type === 'CUSTOM' && params.name) {
-        
+
         const req = await db.companyRequiredDocument.findFirst({
             where: { companyId: params.companyId, name: params.name },
             select: { validityDays: true }
         });
         validityDays = req?.validityDays || null;
     } else {
-        
+
         const company = await db.company.findUnique({
             where: { id: params.companyId },
             select: { standardDocumentValidity: true }
@@ -77,7 +77,7 @@ export async function calculateDocumentDates(params: {
     return { issuedAt, expiresAt };
 }
 
-export async function syncCompanyDocumentExpirations(companyId: string, type: string, name?: string) {
+export async function syncCompanyDocumentExpirations(companyId: string, type: string | any, name?: string) {
     const documents = await db.companyDocument.findMany({
         where: {
             companyId,
