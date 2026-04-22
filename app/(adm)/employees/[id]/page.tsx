@@ -292,7 +292,7 @@ export default function EmployeeProfilePage() {
     setTrainingsZipLoading(true)
     try {
       await downloadTrainingsZip(employee.id, employee.name)
-      toast.success("Download iniciado!")
+      toast.success("Download Concluído!")
     } catch (error: any) {
       toast.error(error?.message || "Erro ao baixar treinamentos")
     } finally {
