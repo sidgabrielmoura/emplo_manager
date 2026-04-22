@@ -37,13 +37,13 @@ export default function SuperAdminLoginPage() {
 
     return (
         <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
-            {/* Left Panel - Master Control branding */}
+            {}
             <div className="hidden lg:flex lg:w-1/2 relative bg-emerald-950 items-center justify-center p-12 overflow-hidden">
-                {/* Master Glow Effects */}
+                {}
                 <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-emerald-600 rounded-full blur-[150px] opacity-20 animate-pulse" />
                 <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-teal-600 rounded-full blur-[120px] opacity-10 animate-pulse delay-1000" />
 
-                {/* Tech Grid Pattern */}
+                {}
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
                     style={{ backgroundImage: `linear-gradient(rgba(16, 185, 129, 0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(16, 185, 129, 0.1) 1px, transparent 1px)`, backgroundSize: '50px 50px' }} />
 
@@ -73,10 +73,10 @@ export default function SuperAdminLoginPage() {
                 </div>
             </div>
 
-            {/* Right Panel - Login Form */}
+            {}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-24 relative bg-white overflow-y-auto">
                 <div className="w-full max-w-md space-y-12">
-                    {/* Mobile Branding */}
+                    {}
                     <div className="lg:hidden flex flex-col items-center gap-6 mb-12">
                         <Image src="/ETX-GESTAO-4.png" alt="ETX GESTÃO" width={180} height={45} className="w-auto h-12" />
                         <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 rounded-full py-1 font-bold">MASTER ADMIN</Badge>

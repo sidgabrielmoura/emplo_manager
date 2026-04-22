@@ -12,7 +12,7 @@ export async function PUT(req: NextRequest) {
         const body = await req.json()
         const { currentPassword, newPassword, confirmPassword, userId } = body
 
-        // Only allow updating own password
+        
         if (sessionUserId !== userId) return forbiddenResponse()
 
         if (!currentPassword || !newPassword || !confirmPassword) {

@@ -37,9 +37,10 @@ export async function calculateDocumentDates(params: {
     companyId: string,
     type: string,
     name?: string,
-    requirementId?: string
+    requirementId?: string,
+    issuedAt?: Date
 }) {
-    const issuedAt = new Date();
+    const issuedAt = params.issuedAt ? new Date(params.issuedAt) : new Date();
     issuedAt.setUTCHours(0, 0, 0, 0);
 
     let validityDays: number | null = null;
@@ -51,14 +52,14 @@ export async function calculateDocumentDates(params: {
         });
         validityDays = req?.validityDays || null;
     } else if (params.type === 'CUSTOM' && params.name) {
-        // Try to find by name for CUSTOM types
+        
         const req = await db.companyRequiredDocument.findFirst({
             where: { companyId: params.companyId, name: params.name },
             select: { validityDays: true }
         });
         validityDays = req?.validityDays || null;
     } else {
-        // For standard types (enums)
+        
         const company = await db.company.findUnique({
             where: { id: params.companyId },
             select: { standardDocumentValidity: true }
@@ -74,4 +75,32 @@ export async function calculateDocumentDates(params: {
     }
 
     return { issuedAt, expiresAt };
+}
+
+export async function syncCompanyDocumentExpirations(companyId: string, type: string, name?: string) {
+    const documents = await db.companyDocument.findMany({
+        where: {
+            companyId,
+            type,
+            ...(name ? { name } : {})
+        }
+    });
+
+    for (const doc of documents) {
+        if (!doc.issuedAt) continue;
+
+        const { expiresAt } = await calculateDocumentDates({
+            companyId,
+            type,
+            name: doc.name || undefined,
+            issuedAt: doc.issuedAt
+        });
+
+        await db.companyDocument.update({
+            where: { id: doc.id },
+            data: { expiresAt }
+        });
+    }
+
+    await updateExpiredStatuses(companyId);
 }

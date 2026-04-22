@@ -17,56 +17,78 @@ export async function POST(req: NextRequest) {
         const today = startOfDay(new Date())
         const next30Days = addDays(today, 30)
 
-        const [
-            totalDocuments,
-            approvedDocuments,
-            pendingDocuments,
-            expiredDocuments,
-            expiringSoonDocuments
-        ] = await Promise.all([
-            db.document.count({
+        const [documents, company, requirements, employees] = await Promise.all([
+            db.document.findMany({
                 where: {
-                    employee: {
-                        companyId: companyId
-                    }
-                }
+                    employee: { companyId: companyId },
+                    deletedAt: null
+                },
+                include: { employee: true },
+                orderBy: { updatedAt: "desc" }
             }),
-            db.document.count({
-                where: {
-                    employee: {
-                        companyId: companyId
-                    },
-                    status: "APPROVED"
-                }
+            db.company.findUnique({
+                where: { id: companyId },
+                select: { disabledDocuments: true }
             }),
-            db.document.count({
-                where: {
-                    employee: {
-                        companyId: companyId
-                    },
-                    status: "PENDING"
-                }
+            db.companyRequiredDocument.findMany({
+                where: { companyId: companyId, target: "EMPLOYEE_DOC", isEnabled: true }
             }),
-            db.document.count({
-                where: {
-                    employee: {
-                        companyId: companyId
-                    },
-                    status: "EXPIRED"
-                }
-            }),
-            db.document.count({
-                where: {
-                    employee: {
-                        companyId: companyId
-                    },
-                    expiresAt: {
-                        gte: today,
-                        lte: next30Days
-                    }
-                }
+            db.employee.findMany({
+                where: { companyId: companyId, status: "ACTIVE" }
             })
         ])
+
+        const disabledDocs = (company?.disabledDocuments as string[]) || []
+
+        
+        const activeRealDocs = documents.filter(doc => {
+            if (doc.type !== "CUSTOM") {
+                return !disabledDocs.includes(doc.type)
+            }
+            return requirements.some(req => req.name === doc.name)
+        })
+
+        const mergedDocuments = [...activeRealDocs]
+
+        
+        employees.forEach(emp => {
+            requirements.forEach(req => {
+                const exists = activeRealDocs.find(
+                    d => d.type === "CUSTOM" && d.name === req.name && d.employeeId === emp.id
+                )
+                if (!exists) {
+                    mergedDocuments.push({
+                        id: `virtual-${emp.id}-${req.id}`,
+                        type: "CUSTOM",
+                        name: req.name,
+                        status: "PENDING",
+                        fileUrl: null,
+                        issuedAt: null,
+                        expiresAt: null,
+                        employeeId: emp.id,
+                        employee: emp,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                        deletedAt: null
+                    } as any)
+                }
+            })
+        })
+
+        const totalDocuments = mergedDocuments.length
+        const approvedDocuments = mergedDocuments.filter(d => d.status === "APPROVED").length
+        const pendingDocuments = mergedDocuments.filter(d => d.status === "PENDING").length
+        const expiredDocuments = mergedDocuments.filter(d => d.status === "EXPIRED").length
+        
+        let expiringSoonDocuments = 0
+        mergedDocuments.forEach(doc => {
+            if (doc.expiresAt) {
+                const expiresAt = new Date(doc.expiresAt)
+                if (expiresAt >= today && expiresAt <= next30Days) {
+                    expiringSoonDocuments++
+                }
+            }
+        })
 
         return NextResponse.json({
             total: totalDocuments,

@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 import { isSuperAdmin, forbiddenResponse, getServerUserId, unauthorizedResponse } from "@/lib/auth"
+import { syncCompanyDocumentExpirations } from "@/lib/docs"
 
 export async function GET(req: NextRequest) {
     try {
@@ -77,7 +78,7 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Requisito não encontrado" }, { status: 404 })
         }
 
-        // Clean up or hide related documents
+        
         if (requirement.target === "COMPANY_DOC" || requirement.target === "COMPANY_LABOR") {
             await db.companyDocument.updateMany({
                 where: {
@@ -141,6 +142,10 @@ export async function PUT(req: NextRequest) {
                 validityDays: validityDays !== undefined ? (validityDays ? parseInt(validityDays) : null) : undefined
             }
         })
+
+        if (validityDays !== undefined) {
+            await syncCompanyDocumentExpirations(requirement.companyId, "CUSTOM", requirement.name)
+        }
 
         return NextResponse.json(requirement, { status: 200 })
     } catch (error) {
@@ -218,6 +223,10 @@ export async function PATCH(req: NextRequest) {
             where: { id: companyId },
             data
         })
+
+        if (action === "set-config" && body.validityDays !== undefined) {
+            await syncCompanyDocumentExpirations(companyId, type)
+        }
 
         return NextResponse.json({ success: true, ...data }, { status: 200 })
     } catch (error) {

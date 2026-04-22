@@ -1,10 +1,6 @@
 import { getServerUserId, unauthorizedResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 
-/**
- * GET /api/download?fileUrl=<url>&fileName=<nome opcional>
- * Faz proxy do arquivo do R2 e força o download com Content-Disposition.
- */
 export async function GET(req: NextRequest) {
   try {
     const userId = await getServerUserId(req)
@@ -18,7 +14,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "fileUrl é obrigatório" }, { status: 400 })
     }
 
-    // Valida que é um domínio R2 confiável
+    
     const publicDomain = process.env.CLOUDFLARE_PUBLIC_DOMAIN || ""
     if (!fileUrl.startsWith(publicDomain)) {
       return NextResponse.json({ error: "URL inválida" }, { status: 400 })

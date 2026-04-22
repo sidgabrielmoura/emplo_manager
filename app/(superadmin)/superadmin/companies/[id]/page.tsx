@@ -489,15 +489,18 @@ export default function CompanyDetailsPage() {
                         </SelectContent>
                       </Select>
                     </div>
+
                     <div className="space-y-1">
                       <Label>Validade (dias)</Label>
                       <Input
                         type="number"
+                        disabled={newTarget === "EMPLOYEE_DOC" || newTarget === "EMPLOYEE_TRAINING"}
                         placeholder="Ex: 365"
                         value={newValidity}
                         onChange={(e) => setNewValidity(e.target.value)}
                       />
                     </div>
+
                     <div className="flex items-end">
                       <Button disabled={adding} type="submit" className="w-full gap-2">
                         {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -526,7 +529,9 @@ export default function CompanyDetailsPage() {
                               <TableHeader className="bg-slate-50/50">
                                 <TableRow>
                                   <TableHead className="py-3">Nome do Documento</TableHead>
-                                  <TableHead className="text-center py-3">Validade (dias)</TableHead>
+                                  {section.target !== 'EMPLOYEE_DOC' && section.target !== 'EMPLOYEE_TRAINING' && (
+                                    <TableHead className="text-center py-3">Validade (dias)</TableHead>
+                                  )}
                                   <TableHead className="text-center py-3">Atividade</TableHead>
                                   <TableHead className="text-center py-3">Criação</TableHead>
                                   <TableHead className="text-right py-3 pr-6">Ações</TableHead>
@@ -543,9 +548,11 @@ export default function CompanyDetailsPage() {
                                   sectionReqs.map((req) => (
                                     <TableRow key={req.id} className="hover:bg-slate-50/30">
                                       <TableCell className="font-medium text-slate-700 py-3">{req.name}</TableCell>
-                                      <TableCell className="text-center font-mono py-3">
-                                        {req.validityDays || "-"}
-                                      </TableCell>
+                                      {section.target !== 'EMPLOYEE_DOC' && section.target !== 'EMPLOYEE_TRAINING' && (
+                                        <TableCell className="text-center font-mono py-3">
+                                          {req.validityDays || "-"}
+                                        </TableCell>
+                                      )}
                                       <TableCell className="text-center py-3">
                                         <Switch
                                           checked={req.isEnabled !== false}
@@ -774,17 +781,19 @@ function EditRequirementModal({
               </Select>
             </div>
           )}
-          <div className="grid gap-2">
-            <Label htmlFor="validity">Validade (dias)</Label>
-            <Input
-              id="validity"
-              type="number"
-              value={validity}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValidity(e.target.value)}
-              placeholder="Ex: 365"
-            />
-            <p className="text-[10px] text-muted-foreground">Deixe vazio para documentos sem validade definida.</p>
-          </div>
+          {!(target === "EMPLOYEE_DOC" || target === "EMPLOYEE_TRAINING") && (
+            <div className="grid gap-2">
+              <Label htmlFor="validity">Validade (dias)</Label>
+              <Input
+                id="validity"
+                type="number"
+                value={validity}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setValidity(e.target.value)}
+                placeholder="Ex: 365"
+              />
+              <p className="text-[10px] text-muted-foreground">Deixe vazio para documentos sem validade definida.</p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>

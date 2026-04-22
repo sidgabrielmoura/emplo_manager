@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
             })
         ])
 
-        // 1. Filter real documents to exclude orphans (CUSTOM documents without active requirement)
-        // and also filter out standard documents that were disabled by the company
+        
+        
         const activeRealDocs = documents.filter(doc => {
             if (doc.type !== "CUSTOM") {
                 const disabledDocs = (employee.company.disabledDocuments as string[]) || []
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
 
         const mergedDocuments = [...activeRealDocs]
 
-        // 2. Add virtual placeholders
+        
         requirements.forEach(req => {
             const exists = activeRealDocs.find(d => d.type === "CUSTOM" && d.name === req.name)
             if (!exists) {

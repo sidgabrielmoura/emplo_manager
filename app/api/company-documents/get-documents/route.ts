@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
             })
         ])
 
-        // 1. Start with real documents found in DB
-        // But filter them: if CUSTOM, only keep if matching an enabled requirement
+        
+        
         const activeRealDocs = documents.filter(doc => {
             if (doc.type !== "CUSTOM") return true;
             return requirements.some(req => req.name === doc.name);
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
         const mergedDocuments = [...activeRealDocs]
 
-        // 2. Add virtual placeholders for missing requirements
+        
         requirements.forEach(req => {
             const exists = activeRealDocs.find(d => d.type === "CUSTOM" && d.name === req.name)
             if (!exists) {

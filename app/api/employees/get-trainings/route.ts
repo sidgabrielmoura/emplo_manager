@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
  
-        // Update expired statuses for the company before fetching
+        
         await updateExpiredStatuses(employee.companyId)
  
         const [trainings, requirements] = await Promise.all([
@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
             })
         ])
  
-        // 1. Filter real trainings to exclude orphans
-        // and also filter out standard trainings that were disabled by the company
+        
+        
         const activeRealTrainings = trainings.filter(t => {
             if (t.type !== "CUSTOM") {
                 const disabledDocs = (employee.company.disabledDocuments as string[]) || []
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
         const mergedTrainings = [...activeRealTrainings]
 
-        // 2. Add virtual placeholders
+        
         requirements.forEach(req => {
             const exists = activeRealTrainings.find(t => t.type === "CUSTOM" && t.name === req.name)
             if (!exists) {

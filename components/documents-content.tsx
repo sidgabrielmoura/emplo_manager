@@ -17,6 +17,7 @@ import Link from "next/link"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "./ui/dialog"
 import { toast } from "sonner"
 import { Switch } from "./ui/switch"
+import { getPTBRDocuments } from "@/lib/constants/documents"
 
 const allowedTypes = [
   "application/pdf",
@@ -46,25 +47,6 @@ export function DocumentsContent() {
   const closeEditDocModal = useRef<HTMLButtonElement>(null)
 
   const now = new Date()
-
-  const translateDocumentName = (type: string, name?: string) => {
-    if (type === "CUSTOM" && name) return name
-    const docs: Record<string, string> = {
-      ASO: "ASO – Atestado de Saúde Ocupacional",
-      RG_CNH: "RG / CNH",
-      CTPS_ESOCIAL: "Carteira de Trabalho / eSocial",
-      OS_NR01: "Ordem de Serviço – NR 01",
-      VACCINE_CARD: "Carteira de Vacinação",
-      LIFE_INSURANCE_208: "Seguro de Vida (Art. 208)",
-      REGISTRATION_FORM: "Ficha de Registro",
-      NR01_TRAINING: "Treinamento NR-01",
-      NR06_EPI_TRAINING: "Treinamento de EPI – NR-06",
-      FIRST_AID_TRAINING_208: "Treinamento de Primeiros Socorros (Art. 208)",
-      EPI_FORM_208: "Ficha de EPI (Art. 208)",
-      FIRE_FIGHTING_TRAINING_208: "Treinamento de Combate a Incêndio (Art. 208)"
-    }
-    return docs[type] || type || "Documento não informado"
-  }
 
   const documentsWithDays = documentStore.documents?.map(doc => {
     const expiresAt = new Date(doc.expiresAt || '')
@@ -143,7 +125,7 @@ export function DocumentsContent() {
       (expirationFilter === "expired" && doc.daysRemaining < 0)
 
     const matchesSearch =
-      translateDocumentName(doc.type, doc.name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getPTBRDocuments(doc.type, doc.name).toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.employee?.name.toLowerCase().includes(searchQuery.toLowerCase())
 
     return matchesStatus && matchesExpiration && matchesSearch
@@ -269,7 +251,7 @@ export function DocumentsContent() {
                           <div className="p-2 rounded-lg bg-slate-50 text-slate-400 group-hover:text-emerald-600 transition-colors">
                             <FileText className="w-4 h-4" />
                           </div>
-                          {translateDocumentName(doc.type, doc.name)}
+                          {getPTBRDocuments(doc.type, doc.name)}
                         </div>
                       </TableCell>
                       <TableCell className="px-6 py-4 text-center font-semibold text-slate-500">{doc.employee?.name}</TableCell>
@@ -303,7 +285,7 @@ export function DocumentsContent() {
                                 className="size-8 p-0 cursor-pointer rounded-lg hover:bg-blue-50 hover:text-blue-600 text-slate-400"
                                 onClick={() => downloadFile(
                                   doc.fileUrl!,
-                                  `${translateDocumentName(doc.type, doc.name)}_${doc.employee?.name || ''}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`
+                                  `${getPTBRDocuments(doc.type, doc.name)}_${doc.employee?.name || ''}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`
                                 )}
                               >
                                 <Download className="size-4" />

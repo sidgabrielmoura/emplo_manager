@@ -13,7 +13,7 @@ export async function checkAndSendExpirationAlerts() {
         const startDate = startOfDay(targetDate);
         const endDate = endOfDay(targetDate);
 
-        // Fetch Superadmins with enabled alerts
+        
         const globalSuperadmins = await db.superadmin.findMany({
             where: {
                 notificationPreferences: {
@@ -95,7 +95,7 @@ export async function checkAndSendExpirationAlerts() {
             const itemsLabel = type === 'document' ? item.type : item.type;
             const formattedDate = format(item.expiresAt, "dd/MM/yyyy", { locale: ptBR });
 
-            // 1. Notify Company Users
+            
             if (item.employee?.company?.users) {
                 item.employee.company.users.forEach((user: any) => {
                     const email = user.notificationPreferences?.email || user.email;
@@ -114,7 +114,7 @@ export async function checkAndSendExpirationAlerts() {
                 });
             }
 
-            // 2. Notify Global Superadmins
+            
             globalSuperadmins.forEach((sa: any) => {
                 const email = sa.notificationPreferences?.email || sa.email;
                 if (!adminNotifications.has(email)) {

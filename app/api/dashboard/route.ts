@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const hasAccess = await validateCompanyAccess(userId, company_id)
     if (!hasAccess) return forbiddenResponse()
 
-    // Update expired statuses for the company before fetching dashboard data
+    
     await updateExpiredStatuses(company_id)
 
     const today = startOfDay(new Date())

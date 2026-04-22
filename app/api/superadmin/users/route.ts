@@ -3,7 +3,7 @@ import bcrypt from "bcrypt"
 import { NextRequest, NextResponse } from "next/server"
 import { isSuperAdmin, forbiddenResponse } from "@/lib/auth"
 
-// GET: List all users from all companies
+
 export async function GET(req: NextRequest) {
     try {
         const isSuper = await isSuperAdmin(req)
@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
     }
 }
 
-// PUT: Update user (name, email, role, or password)
+
 export async function PUT(req: NextRequest) {
     try {
         const isSuper = await isSuperAdmin(req)
@@ -62,7 +62,7 @@ export async function PUT(req: NextRequest) {
     }
 }
 
-// DELETE: Delete a user
+
 export async function DELETE(req: NextRequest) {
     try {
         const isSuper = await isSuperAdmin(req)

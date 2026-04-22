@@ -11,7 +11,7 @@ export function getDaysRemaining(date: Date | string | null | undefined): string
   const expiryDate = new Date(date);
   const today = new Date();
 
-  // Reset hours to compare only days in UTC to avoid timezone issues
+  
   expiryDate.setUTCHours(0, 0, 0, 0);
   today.setUTCHours(0, 0, 0, 0);
 

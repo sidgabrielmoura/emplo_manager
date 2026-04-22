@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
 
     const folder = (formData.get("folder") as string) || "gerenciow"
     const bucketName = process.env.CLOUDFLARE_BUCKET_NAME!
-    const publicDomain = process.env.CLOUDFLARE_PUBLIC_DOMAIN! // Ex: https://xxx.r2.dev or custom domain
+    const publicDomain = process.env.CLOUDFLARE_PUBLIC_DOMAIN! 
 
     if (!files.length) {
       return NextResponse.json({ error: "Arquivos não enviados" }, { status: 400 })
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
         const bytes = await file.arrayBuffer()
         const buffer = Buffer.from(bytes)
 
-        // Gerar chave única mantendo pasta e nome original
+        
         const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`
         const key = `${folder}/${fileName}`
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
         return {
           url: url,
-          public_id: key, // Usamos o key como id único equivalente ao do cloudinary
+          public_id: key, 
           originalName: file.name,
         }
       })

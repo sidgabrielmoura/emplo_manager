@@ -42,13 +42,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
-      {/* Left Panel - Branding (Hidden on Mobile) */}
+      {}
       <div className="hidden lg:flex lg:w-1/2 relative bg-slate-950 items-center justify-center p-12 overflow-hidden">
-        {/* Abstract Background Accents */}
+        {}
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-emerald-600 rounded-full blur-[120px] opacity-20 animate-pulse" />
         <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-teal-600 rounded-full blur-[100px] opacity-10 animate-pulse delay-700" />
 
-        {/* Grid Pattern */}
+        {}
         <div className="absolute inset-0 opacity-[0.05] pointer-events-none"
           style={{ backgroundImage: `radial-gradient(circle at 2px 2px, white 1px, transparent 0)`, backgroundSize: '40px 40px' }} />
 
@@ -80,10 +80,10 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 md:p-20 relative bg-white overflow-y-auto">
         <div className="w-full max-w-md space-y-12">
-          {/* Mobile Logo */}
+          {}
           <div className="lg:hidden flex justify-center mb-8">
             <Image src="/ETX-GESTAO-5.png" alt="ETX GESTÃO" width={120} height={120} className="w-auto h-16" />
           </div>

@@ -952,11 +952,7 @@ export async function toggleCompanyStandardDocument(payload: {
     }
 }
 
-/**
- * Força o download de um arquivo individual pelo proxy da API.
- * @param fileUrl URL pública do arquivo no R2
- * @param fileName Nome sugerido para o arquivo baixado
- */
+
 export function downloadFile(fileUrl: string, fileName: string) {
     const params = new URLSearchParams({ fileUrl, fileName })
     const link = document.createElement('a')
@@ -967,11 +963,7 @@ export function downloadFile(fileUrl: string, fileName: string) {
     document.body.removeChild(link)
 }
 
-/**
- * Baixa todos os documentos de um funcionário como um arquivo .zip.
- * @param employeeId ID do funcionário
- * @param employeeName Nome do funcionário (usado no nome do arquivo)
- */
+
 export async function downloadEmployeeZip(employeeId: string, employeeName: string) {
     const response = await fetch(`${base_url}/download/zip`, {
         method: 'POST',
@@ -997,11 +989,7 @@ export async function downloadEmployeeZip(employeeId: string, employeeName: stri
     URL.revokeObjectURL(url)
 }
 
-/**
- * Baixa todos os treinamentos de um funcionário como um arquivo .zip.
- * @param employeeId ID do funcionário
- * @param employeeName Nome do funcionário (usado no nome do arquivo)
- */
+
 export async function downloadTrainingsZip(employeeId: string, employeeName: string) {
     const response = await fetch(`${base_url}/download/zip`, {
         method: 'POST',
