@@ -26,7 +26,7 @@ export function EmployeesContent() {
     setZipLoadingId(employeeId)
     try {
       await downloadEmployeeZip(employeeId, employeeName)
-      toast.success("Download iniciado!")
+      toast.success("Download Concluído!")
     } catch (error: any) {
       toast.error(error?.message || "Erro ao baixar arquivos")
     } finally {
