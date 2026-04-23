@@ -53,44 +53,39 @@ export async function POST(req: NextRequest) {
       })
     ])
 
-    const [
-      approvedDocuments,
-      pendingDocuments,
-      expiredDocuments,
-      expiredSoon
-    ] = await Promise.all([
-      db.document.count({
-        where: {
-          employee: { companyId: company_id },
-          status: "APPROVED",
-          deletedAt: null
-        }
+    const [rawDocuments, companyInfo, requirements] = await Promise.all([
+      db.document.findMany({
+        where: { employee: { companyId: company_id }, deletedAt: null }
       }),
-      db.document.count({
-        where: {
-          employee: { companyId: company_id },
-          status: "PENDING",
-          deletedAt: null
-        }
+      db.company.findUnique({
+        where: { id: company_id },
+        select: { disabledDocuments: true }
       }),
-      db.document.count({
-        where: {
-          employee: { companyId: company_id },
-          status: "EXPIRED",
-          deletedAt: null
-        }
-      }),
-      db.document.count({
-        where: {
-          employee: { companyId: company_id },
-          expiresAt: {
-            gte: today,
-            lte: next30Days
-          },
-          deletedAt: null
-        }
+      db.companyRequiredDocument.findMany({
+        where: { companyId: company_id, target: { in: ["EMPLOYEE_DOC", "EMPLOYEE_TRAINING"] }, isEnabled: true }
       })
     ])
+
+    const disabledDocs = (companyInfo?.disabledDocuments as string[]) || []
+
+    const validDocuments = rawDocuments.filter(doc => {
+      if (doc.type !== "CUSTOM") {
+        return !disabledDocs.includes(doc.type)
+      }
+      return requirements.some(req => req.name === doc.name)
+    })
+
+    const approvedDocuments = validDocuments.filter(d => d.status === "APPROVED").length
+    const pendingDocuments = validDocuments.filter(d => d.status === "PENDING").length
+    const expiredDocuments = validDocuments.filter(d => d.status === "EXPIRED").length
+    let expiredSoon = 0
+
+    validDocuments.forEach(doc => {
+      if (doc.expiresAt) {
+        const dExp = new Date(doc.expiresAt)
+        if (dExp >= today && dExp <= next30Days) expiredSoon++
+      }
+    })
 
     const recentEmployeesData = await db.employee.findMany({
       where: { companyId: company_id },

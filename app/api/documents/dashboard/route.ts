@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
                 select: { disabledDocuments: true }
             }),
             db.companyRequiredDocument.findMany({
-                where: { companyId: companyId, target: "EMPLOYEE_DOC", isEnabled: true }
+                where: { companyId: companyId, target: { in: ["EMPLOYEE_DOC", "EMPLOYEE_TRAINING"] }, isEnabled: true }
             }),
             db.employee.findMany({
                 where: { companyId: companyId, status: "ACTIVE" }
@@ -40,7 +40,6 @@ export async function POST(req: NextRequest) {
 
         const disabledDocs = (company?.disabledDocuments as string[]) || []
 
-        
         const activeRealDocs = documents.filter(doc => {
             if (doc.type !== "CUSTOM") {
                 return !disabledDocs.includes(doc.type)
@@ -50,36 +49,11 @@ export async function POST(req: NextRequest) {
 
         const mergedDocuments = [...activeRealDocs]
 
-        
-        employees.forEach(emp => {
-            requirements.forEach(req => {
-                const exists = activeRealDocs.find(
-                    d => d.type === "CUSTOM" && d.name === req.name && d.employeeId === emp.id
-                )
-                if (!exists) {
-                    mergedDocuments.push({
-                        id: `virtual-${emp.id}-${req.id}`,
-                        type: "CUSTOM",
-                        name: req.name,
-                        status: "PENDING",
-                        fileUrl: null,
-                        issuedAt: null,
-                        expiresAt: null,
-                        employeeId: emp.id,
-                        employee: emp,
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                        deletedAt: null
-                    } as any)
-                }
-            })
-        })
-
         const totalDocuments = mergedDocuments.length
         const approvedDocuments = mergedDocuments.filter(d => d.status === "APPROVED").length
         const pendingDocuments = mergedDocuments.filter(d => d.status === "PENDING").length
         const expiredDocuments = mergedDocuments.filter(d => d.status === "EXPIRED").length
-        
+
         let expiringSoonDocuments = 0
         mergedDocuments.forEach(doc => {
             if (doc.expiresAt) {
