@@ -11,13 +11,17 @@ export async function PUT(req: NextRequest) {
 
         const body = await req.json()
 
-        if (!body.fileUrl) {
+        if (!body.fileUrl && !body.clear) {
             return NextResponse.json({ error: 'url do arquivo não encontrada' }, { status: 400 })
         }
 
         const isVirtual = body.id && body.id.startsWith('virtual-')
 
         if (isVirtual) {
+            if (body.clear) {
+                return NextResponse.json({ success: true })
+            }
+
             const requirementId = body.id.replace('virtual-', '')
             const requirement = await db.companyRequiredDocument.findUnique({
                 where: { id: requirementId }
@@ -96,6 +100,21 @@ export async function PUT(req: NextRequest) {
 
         let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
         let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+        if (body.clear) {
+            const response = await db.document.update({
+                where: {
+                    id: body.id
+                },
+                data: {
+                    fileUrl: null,
+                    expiresAt: null,
+                    issuedAt: null,
+                    status: 'PENDING'
+                }
+            })
+            return NextResponse.json(response)
+        }
 
         if (!issuedAt || !expiresAt) {
             const dates = await calculateDocumentDates({

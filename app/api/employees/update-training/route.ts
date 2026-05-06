@@ -12,13 +12,17 @@ export async function PUT(req: NextRequest) {
         const body = await req.json()
         const trainingId = body.id
 
-        if (!body.fileUrl) {
+        if (!body.fileUrl && !body.clear) {
             return NextResponse.json({ error: 'url do arquivo não encontrada' }, { status: 400 })
         }
 
         const isVirtual = trainingId && trainingId.startsWith('virtual-')
 
         if (isVirtual) {
+            if (body.clear) {
+                return NextResponse.json({ success: true })
+            }
+
             const requirementId = trainingId.replace('virtual-', '')
             const requirement = await db.companyRequiredDocument.findUnique({
                 where: { id: requirementId }
@@ -87,6 +91,20 @@ export async function PUT(req: NextRequest) {
 
         const hasAccess = await validateCompanyAccess(userId, trainingData.employee.companyId)
         if (!hasAccess) return forbiddenResponse()
+
+        if (body.clear) {
+            const training = await db.training.update({
+                where: { id: trainingId },
+                data: {
+                    status: 'PENDING',
+                    fileUrl: null,
+                    issuedAt: null,
+                    expiresAt: null,
+                    deletedAt: null
+                }
+            })
+            return NextResponse.json(training)
+        }
 
         const { issuedAt, expiresAt } = await calculateDocumentDates({
             companyId: trainingData.employee.companyId,

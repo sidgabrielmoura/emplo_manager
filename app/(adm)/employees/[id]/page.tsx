@@ -287,6 +287,46 @@ export default function EmployeeProfilePage() {
     }
   }
 
+  const handleClearDocument = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja remover este arquivo e zerar os dados?")) return;
+    setLoading(true)
+    try {
+      const response = await updateEmployeeDocument({
+        id,
+        clear: true
+      }, employee.id)
+
+      if (response) {
+        toast.success('Documento zerado com sucesso')
+        closeEditDocModal.current?.click()
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao zerar documento")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleClearTraining = async (id: string) => {
+    if (!window.confirm("Tem certeza que deseja remover este arquivo e zerar os dados?")) return;
+    setLoading(true)
+    try {
+      const response = await updateTraining({
+        id,
+        clear: true
+      }, employee.id)
+
+      if (response) {
+        toast.success('Treinamento zerado com sucesso')
+        closeEditDocModal.current?.click()
+      }
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao zerar treinamento")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function handleDownloadTrainingsZip() {
     if (!employee) return
     setTrainingsZipLoading(true)
@@ -922,6 +962,9 @@ export default function EmployeeProfilePage() {
                                         </div>
 
                                         <div className="flex justify-end gap-2 pt-2">
+                                          <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearDocument(doc.id)}>
+                                            Zerar arquivo
+                                          </Button>
                                           <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
                                           <Button
                                             className="cursor-pointer gap-2"
@@ -1273,6 +1316,9 @@ export default function EmployeeProfilePage() {
                                         </section>
 
                                         <div className="flex justify-end gap-2 pt-2">
+                                          <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearTraining(training.id)}>
+                                            Zerar arquivo
+                                          </Button>
                                           <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
                                           <Button
                                             className="cursor-pointer gap-2"

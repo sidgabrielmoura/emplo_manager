@@ -359,7 +359,8 @@ export async function updateEmployeeDocument(payload: {
     id: string,
     expiresAt?: string,
     issuedAt?: string,
-    fileUrl: string,
+    fileUrl?: string | null,
+    clear?: boolean
 }, employee_id: string) {
     try {
         const { data } = await axios.put(
@@ -608,8 +609,9 @@ export async function updateTraining(payload: {
     id: string,
     expiresAt?: string,
     issuedAt?: string,
-    fileUrl?: string,
-    status?: string
+    fileUrl?: string | null,
+    status?: string,
+    clear?: boolean
 }, employee_id: string) {
     try {
         const { data } = await axios.put(
