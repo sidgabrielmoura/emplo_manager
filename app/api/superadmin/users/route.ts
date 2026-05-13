@@ -83,3 +83,47 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: "Erro ao deletar usuário" }, { status: 500 })
     }
 }
+
+export async function POST(req: NextRequest) {
+    try {
+        const isSuper = await isSuperAdmin(req)
+        if (!isSuper) return forbiddenResponse()
+
+        const body = await req.json()
+        const { name, email, role, password, companyId } = body
+
+        if (!name || !email || !role || !password) {
+            return NextResponse.json({ error: "Nome, email, função e senha são obrigatórios" }, { status: 400 })
+        }
+
+        const userExists = await db.user.findUnique({
+            where: { email }
+        })
+
+        if (userExists) {
+            return NextResponse.json({ error: "Usuário com este e-mail já cadastrado" }, { status: 400 })
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10)
+
+        const user = await db.user.create({
+            data: {
+                name,
+                email,
+                role,
+                password: hashedPassword,
+                companyId: (role === "ADMIN" || role === "RH") ? companyId : undefined
+            },
+            include: {
+                company: {
+                    select: { id: true, name: true }
+                }
+            }
+        })
+
+        return NextResponse.json(user, { status: 201 })
+    } catch (error) {
+        console.error("[SUPERADMIN_POST_USER]", error)
+        return NextResponse.json({ error: "Erro ao criar usuário" }, { status: 500 })
+    }
+}

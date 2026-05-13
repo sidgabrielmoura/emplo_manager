@@ -745,6 +745,28 @@ export async function getSuperAdminUsers() {
     }
 }
 
+export async function createSuperAdminUser(payload: {
+    name: string,
+    email: string,
+    role: string,
+    password?: string,
+    companyId?: string
+}) {
+    try {
+        const { data } = await axios.post(
+            '/superadmin/users',
+            payload,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
 export async function updateSuperAdminUser(payload: {
     userId: string,
     name?: string,

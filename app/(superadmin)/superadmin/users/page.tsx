@@ -25,8 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Search, Users, Loader2, MoreVertical, Pencil, Trash2, KeyRound, Building2, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
-import { getSuperAdminUsers, updateSuperAdminUser, deleteSuperAdminUser } from "@/actions/requests"
+import { getSuperAdminUsers, updateSuperAdminUser, deleteSuperAdminUser, createSuperAdminUser, getSuperAdminCompanies } from "@/actions/requests"
 import { SuperAdminAppLayout } from "@/components/superadm-layout"
+import { Plus } from "lucide-react"
 
 type UserData = {
     id: string
@@ -97,6 +98,11 @@ export default function SuperAdminUsersPage() {
     const [deleteUser, setDeleteUser] = useState<UserData | null>(null)
     const [deleteLoading, setDeleteLoading] = useState(false)
 
+    const [createOpen, setCreateOpen] = useState(false)
+    const [createForm, setCreateForm] = useState({ name: "", email: "", role: "ADMIN", password: "", companyId: "" })
+    const [createLoading, setCreateLoading] = useState(false)
+    const [allCompanies, setAllCompanies] = useState<any[]>([])
+
     const fetchUsers = async () => {
         try {
             const data = await getSuperAdminUsers()
@@ -109,7 +115,19 @@ export default function SuperAdminUsersPage() {
         }
     }
 
-    useEffect(() => { fetchUsers() }, [])
+    const fetchCompanies = async () => {
+        try {
+            const data = await getSuperAdminCompanies()
+            setAllCompanies(data)
+        } catch (err) {
+            console.error("Erro ao carregar empresas:", err)
+        }
+    }
+
+    useEffect(() => {
+        fetchUsers()
+        fetchCompanies()
+    }, [])
 
     const companies = Array.from(
         new Map(users.filter(u => u.company).map(u => [u.company!.id, u.company!])).values()
@@ -203,6 +221,31 @@ export default function SuperAdminUsersPage() {
         }
     }
 
+    async function handleCreate() {
+        if (!createForm.name || !createForm.email || !createForm.password || !createForm.role) {
+            toast.warning("Preencha todos os campos obrigatórios")
+            return
+        }
+
+        if ((createForm.role === "ADMIN" || createForm.role === "RH") && !createForm.companyId) {
+            toast.warning("Selecione uma empresa para este perfil")
+            return
+        }
+
+        setCreateLoading(true)
+        try {
+            await createSuperAdminUser(createForm)
+            toast.success("Usuário criado com sucesso!")
+            setCreateOpen(false)
+            setCreateForm({ name: "", email: "", role: "ADMIN", password: "", companyId: "" })
+            fetchUsers()
+        } catch (err: any) {
+            toast.error(err?.response?.data?.error || "Erro ao criar usuário")
+        } finally {
+            setCreateLoading(false)
+        }
+    }
+
     function getUserAvatar(name: string) {
         return name?.charAt(0)?.toUpperCase() || "?"
     }
@@ -210,9 +253,18 @@ export default function SuperAdminUsersPage() {
     return (
         <SuperAdminAppLayout>
             <div className="space-y-6">
-                <div>
-                    <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Usuários do Sistema</h1>
-                    <p className="text-slate-500 mt-1">Gerencie todos os usuários cadastrados em todas as empresas.</p>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Usuários do Sistema</h1>
+                        <p className="text-slate-500 mt-1">Gerencie todos os usuários cadastrados em todas as empresas.</p>
+                    </div>
+                    <Button
+                        onClick={() => setCreateOpen(true)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl px-6 py-3 h-auto font-bold shadow-lg shadow-emerald-200 transition-all active:scale-95 gap-2"
+                    >
+                        <Plus className="w-5 h-5" />
+                        Novo Usuário
+                    </Button>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 lg:gap-4">
@@ -478,6 +530,87 @@ export default function SuperAdminUsersPage() {
                         </Button>
                         <Button variant="destructive" onClick={handleDelete} disabled={deleteLoading} className="rounded-xl cursor-pointer min-w-[100px]">
                             {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Deletar"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <DialogContent className="rounded-2xl max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-xl font-bold">Novo Usuário</DialogTitle>
+                        <DialogDescription>Preencha os dados abaixo para criar um novo usuário no sistema.</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="create-name">Nome completo</Label>
+                            <Input
+                                id="create-name"
+                                placeholder="Ex: João Silva"
+                                value={createForm.name}
+                                onChange={e => setCreateForm(p => ({ ...p, name: e.target.value }))}
+                                className="rounded-xl"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="create-email">E-mail</Label>
+                            <Input
+                                id="create-email"
+                                type="email"
+                                placeholder="email@exemplo.com"
+                                value={createForm.email}
+                                onChange={e => setCreateForm(p => ({ ...p, email: e.target.value }))}
+                                className="rounded-xl"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="create-pw">Senha</Label>
+                            <Input
+                                id="create-pw"
+                                type="password"
+                                placeholder="Mínimo 6 caracteres"
+                                value={createForm.password}
+                                onChange={e => setCreateForm(p => ({ ...p, password: e.target.value }))}
+                                className="rounded-xl"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="create-role">Função</Label>
+                                <Select value={createForm.role} onValueChange={v => setCreateForm(p => ({ ...p, role: v }))}>
+                                    <SelectTrigger className="rounded-xl w-full!">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="ADMIN">Admin</SelectItem>
+                                        <SelectItem value="RH">RH</SelectItem>
+                                        <SelectItem value="SUPERADMIN">Super Admin</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            {(createForm.role === "ADMIN" || createForm.role === "RH") && (
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="create-company">Empresa</Label>
+                                    <Select value={createForm.companyId} onValueChange={v => setCreateForm(p => ({ ...p, companyId: v }))}>
+                                        <SelectTrigger className="rounded-xl w-full!">
+                                            <SelectValue placeholder="Selecione..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {allCompanies.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter className="gap-2 mt-2">
+                        <Button variant="outline" onClick={() => setCreateOpen(false)} disabled={createLoading} className="rounded-xl cursor-pointer">
+                            Cancelar
+                        </Button>
+                        <Button onClick={handleCreate} disabled={createLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl cursor-pointer min-w-[120px]">
+                            {createLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Criar usuário"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
