@@ -11,13 +11,17 @@ export async function PUT(req: NextRequest) {
 
         const body = await req.json()
 
-        if (!body.fileUrl) {
+        if (!body.fileUrl && !body.clear) {
             return NextResponse.json({ error: 'URL do arquivo não encontrada' }, { status: 400 })
         }
 
         const isVirtual = body.id && body.id.startsWith('virtual-')
 
         if (isVirtual) {
+            if (body.clear) {
+                return NextResponse.json({ success: true })
+            }
+
             const requirementId = body.id.replace('virtual-', '')
             const requirement = await db.companyRequiredDocument.findUnique({
                 where: { id: requirementId }
@@ -30,12 +34,19 @@ export async function PUT(req: NextRequest) {
             const hasAccess = await validateCompanyAccess(userId, body.companyId)
             if (!hasAccess) return forbiddenResponse()
 
-            const { issuedAt, expiresAt } = await calculateDocumentDates({
-                companyId: body.companyId,
-                type: 'CUSTOM',
-                name: requirement.name,
-                requirementId: requirementId
-            })
+            let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+            let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+            if (!issuedAt || !expiresAt) {
+                const dates = await calculateDocumentDates({
+                    companyId: body.companyId,
+                    type: 'CUSTOM',
+                    name: requirement.name,
+                    requirementId: requirementId
+                })
+                issuedAt = dates.issuedAt
+                expiresAt = dates.expiresAt
+            }
 
             const response = await db.companyDocument.upsert({
                 where: {
@@ -49,7 +60,8 @@ export async function PUT(req: NextRequest) {
                     fileUrl: body.fileUrl,
                     expiresAt,
                     issuedAt,
-                    status: 'APPROVED'
+                    status: 'APPROVED',
+                    deletedAt: null
                 },
                 create: {
                     companyId: body.companyId,
@@ -65,47 +77,10 @@ export async function PUT(req: NextRequest) {
             return NextResponse.json(response)
         }
 
-        if (!body.id && body.companyId && body.type) {
-            const hasAccess = await validateCompanyAccess(userId, body.companyId)
-            if (!hasAccess) return forbiddenResponse()
-
-            const { issuedAt, expiresAt } = await calculateDocumentDates({
-                companyId: body.companyId,
-                type: body.type,
-                name: body.name
-            })
-
-            const created = await db.companyDocument.upsert({
-                where: {
-                    companyId_type_name: {
-                        companyId: body.companyId,
-                        type: body.type,
-                        name: body.name || ""
-                    }
-                },
-                update: {
-                    fileUrl: body.fileUrl,
-                    expiresAt,
-                    issuedAt,
-                    status: 'APPROVED'
-                },
-                create: {
-                    companyId: body.companyId,
-                    type: body.type,
-                    name: body.name || "",
-                    fileUrl: body.fileUrl,
-                    expiresAt,
-                    issuedAt,
-                    status: 'APPROVED'
-                }
-            })
-            return NextResponse.json(created)
-        }
-
         if (body.id) {
             const existingDoc = await db.companyDocument.findUnique({
                 where: { id: body.id },
-                select: { companyId: true }
+                select: { companyId: true, type: true, name: true }
             })
 
             if (!existingDoc) {
@@ -115,11 +90,31 @@ export async function PUT(req: NextRequest) {
             const hasAccess = await validateCompanyAccess(userId, existingDoc.companyId)
             if (!hasAccess) return forbiddenResponse()
 
-            const { issuedAt, expiresAt } = await calculateDocumentDates({
-                companyId: existingDoc.companyId,
-                type: (existingDoc as any).type,
-                name: (existingDoc as any).name
-            })
+            if (body.clear) {
+                const response = await db.companyDocument.update({
+                    where: { id: body.id },
+                    data: {
+                        fileUrl: null,
+                        expiresAt: null,
+                        issuedAt: null,
+                        status: 'PENDING'
+                    }
+                })
+                return NextResponse.json(response)
+            }
+
+            let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+            let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+            if (!issuedAt || !expiresAt) {
+                const dates = await calculateDocumentDates({
+                    companyId: existingDoc.companyId,
+                    type: existingDoc.type,
+                    name: existingDoc.name
+                })
+                issuedAt = dates.issuedAt
+                expiresAt = dates.expiresAt
+            }
 
             const response = await db.companyDocument.update({
                 where: { id: body.id },
@@ -133,6 +128,51 @@ export async function PUT(req: NextRequest) {
             })
 
             return NextResponse.json(response)
+        }
+
+        if (body.companyId && body.type) {
+            const hasAccess = await validateCompanyAccess(userId, body.companyId)
+            if (!hasAccess) return forbiddenResponse()
+
+            let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
+            let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
+
+            if (!issuedAt || !expiresAt) {
+                const dates = await calculateDocumentDates({
+                    companyId: body.companyId,
+                    type: body.type,
+                    name: body.name
+                })
+                issuedAt = dates.issuedAt
+                expiresAt = dates.expiresAt
+            }
+
+            const created = await db.companyDocument.upsert({
+                where: {
+                    companyId_type_name: {
+                        companyId: body.companyId,
+                        type: body.type,
+                        name: body.name || ""
+                    }
+                },
+                update: {
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED',
+                    deletedAt: null
+                },
+                create: {
+                    companyId: body.companyId,
+                    type: body.type,
+                    name: body.name || "",
+                    fileUrl: body.fileUrl,
+                    expiresAt,
+                    issuedAt,
+                    status: 'APPROVED'
+                }
+            })
+            return NextResponse.json(created)
         }
 
         return NextResponse.json({ error: "Dados inválidos" }, { status: 400 })

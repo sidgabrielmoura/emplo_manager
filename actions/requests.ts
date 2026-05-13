@@ -178,7 +178,8 @@ export async function updateCompanyDocument(payload: {
     companyId: string,
     expiresAt?: string,
     issuedAt?: string,
-    fileUrl: string,
+    fileUrl?: string | null,
+    clear?: boolean
 }) {
     try {
         const { data } = await axios.put(

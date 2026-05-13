@@ -11,12 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanyStore } from "@/stores/company"
 import { useSnapshot } from "valtio"
 import { useEffect, useState } from "react"
-import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye } from "lucide-react"
+import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download, Pencil, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData } from "@/actions/requests"
+import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile } from "@/actions/requests"
 import { toast } from "sonner"
 import Link from "next/link"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTrigger, DialogClose } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -67,6 +68,10 @@ export default function CompanySettingsPage() {
     const [uploadLoading, setUploadLoading] = useState(false)
     const [selectedType, setSelectedType] = useState<string | null>(null)
     const [uploadFile, setUploadFile] = useState<File | null>(null)
+    const [preview, setPreview] = useState<string | null>(null)
+    const [issuedAt, setIssuedAt] = useState<string>("")
+    const [expireAt, setExpireAt] = useState<string>("")
+    const [expire, setExpire] = useState<boolean>(false)
 
     const docInputRef = useRef<HTMLInputElement>(null)
     const dialogCloseRef = useRef<HTMLButtonElement>(null)
@@ -148,35 +153,72 @@ export default function CompanySettingsPage() {
         }
     }
 
-    const handleUploadDocument = async (virtualId?: string) => {
+    const handleSelect = (fileList?: FileList | null) => {
+        if (!fileList?.[0]) return
+        const selected = fileList[0]
+        setUploadFile(selected)
+        setPreview(URL.createObjectURL(selected))
+    }
+
+    const handleUploadDocument = async (virtualId?: string, currentFileUrl?: string | null) => {
         const companyId = company_selected?.id || localStorage.getItem('company_id')
-        if (!uploadFile || !companyId) return
+        if (!companyId) return
         if (!selectedType && !virtualId) return
+
+        if (!uploadFile && !currentFileUrl) {
+            toast.error("Selecione um arquivo")
+            return
+        }
+
+        if (!issuedAt) {
+            toast.error("Informe a data de emissão")
+            return
+        }
+
+        if (expire && !expireAt) {
+            toast.error("Informe a data de vencimento")
+            return
+        }
 
         setUploadLoading(true)
         try {
-            const uploaded: any = await uploadImage(uploadFile).catch(() => {
-                toast.error("Erro ao fazer upload do arquivo (pode ser muito grande).")
-                return null
-            })
+            let fileUrl = currentFileUrl
 
-            if (!uploaded) throw new Error("Upload failed")
+            if (uploadFile) {
+                const uploaded: any = await uploadImage(uploadFile).catch(() => {
+                    toast.error("Erro ao fazer upload do arquivo (pode ser muito grande).")
+                    return null
+                })
+
+                if (!uploaded) {
+                    setUploadLoading(false)
+                    return
+                }
+
+                fileUrl = uploaded.url
+            }
 
             await updateCompanyDocument({
                 id: virtualId,
                 companyId: companyId,
                 type: selectedType || 'CUSTOM',
-                fileUrl: uploaded.url
+                fileUrl: fileUrl,
+                issuedAt: issuedAt,
+                expiresAt: expire ? expireAt : undefined
             })
 
-            toast.success("Documento enviado com sucesso!")
+            toast.success("Documento atualizado com sucesso!")
 
             setDocsLoading(true)
             const updatedDocs = await getCompanyDocuments(companyId)
             setDocuments(updatedDocs)
 
             setUploadFile(null)
+            setPreview(null)
             setSelectedType(null)
+            setIssuedAt("")
+            setExpireAt("")
+            setExpire(false)
             dialogCloseRef.current?.click()
         } catch (error) {
             toast.error("Erro ao atualizar dados do documento.")
@@ -248,7 +290,7 @@ export default function CompanySettingsPage() {
                                             <TableHead>Documento</TableHead>
                                             <TableHead className="w-40! text-center">Status</TableHead>
                                             <TableHead className="w-40! text-center">Data de emissão</TableHead>
-                                            <TableHead className="w-40! text-center">Dias para vencer</TableHead>
+                                            <TableHead className="w-40! text-center">Vencimento</TableHead>
                                             <TableHead className="text-right">Ação</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -270,70 +312,184 @@ export default function CompanySettingsPage() {
                                                     <TableCell className="text-center text-slate-500">
                                                         {docData?.issuedAt ? new Date(docData.issuedAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
                                                     </TableCell>
-                                                    <TableCell className="text-center text-slate-500">
-                                                        {docData?.expiresAt ? getDaysRemaining(docData.expiresAt) : "—"}
+                                                    <TableCell className="text-center text-slate-500 font-bold tabular-nums">
+                                                        {docData?.expiresAt ? new Date(docData.expiresAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        {docData?.fileUrl ? (
-                                                            <Link href={docData.fileUrl} target="_blank">
-                                                                <Button variant="outline" size="sm" className="gap-2 cursor-pointer rounded-xl text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50">
-                                                                    <Eye className="w-4 h-4" /> Ver
-                                                                </Button>
-                                                            </Link>
-                                                        ) : (
-                                                            <Dialog>
-                                                                <DialogTrigger asChild>
-                                                                    <Button size="sm" onClick={() => setSelectedType(type)} className="gap-2 cursor-pointer rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold shadow-md shadow-slate-200">
-                                                                        <Upload className="w-4 h-4" /> Enviar
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            {docData?.fileUrl && (
+                                                                <>
+                                                                    <Link href={docData.fileUrl} target="_blank">
+                                                                        <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-emerald-50 hover:text-emerald-600 text-slate-400">
+                                                                            <Eye className="size-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="size-8 p-0 cursor-pointer rounded-lg hover:bg-blue-50 hover:text-blue-600 text-slate-400"
+                                                                        onClick={() => downloadFile(
+                                                                            docData.fileUrl!,
+                                                                            `${label}.${docData.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`
+                                                                        )}
+                                                                    >
+                                                                        <Download className="size-4" />
                                                                     </Button>
+                                                                </>
+                                                            )}
+
+                                                            <Dialog onOpenChange={(open) => {
+                                                                if (open) {
+                                                                    setUploadFile(null)
+                                                                    setPreview(null)
+                                                                    setSelectedType(type)
+                                                                    setIssuedAt(docData?.issuedAt ? new Date(docData.issuedAt).toISOString().split('T')[0] : "")
+                                                                    setExpireAt(docData?.expiresAt ? new Date(docData.expiresAt).toISOString().split('T')[0] : "")
+                                                                    setExpire(!!docData?.expiresAt)
+                                                                }
+                                                            }}>
+                                                                <DialogTrigger asChild>
+                                                                    {docData?.fileUrl ? (
+                                                                        <Button variant="ghost" size="sm" className="size-8 p-0 cursor-pointer rounded-lg hover:bg-amber-50 hover:text-amber-600 text-slate-400">
+                                                                            <Pencil className="size-4" />
+                                                                        </Button>
+                                                                    ) : (
+                                                                        <Button size="sm" className="gap-2 cursor-pointer rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold shadow-md shadow-slate-200">
+                                                                            <Upload className="w-4 h-4" /> Enviar
+                                                                        </Button>
+                                                                    )}
                                                                 </DialogTrigger>
                                                                 <DialogContent className="max-w-2xl! w-full rounded-2xl">
-                                                                    <div className="space-y-4 pt-4">
-                                                                        <h3 className="font-bold text-lg text-slate-800">Enviar: {label}</h3>
+                                                                    <div className="space-y-5">
+                                                                        <h3 className="font-bold text-lg text-slate-800">{docData?.fileUrl ? 'Editar' : 'Enviar'}: {label}</h3>
 
-                                                                        <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50">
-                                                                            <input
-                                                                                type="file"
-                                                                                className="hidden"
-                                                                                ref={docInputRef}
-                                                                                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                                                                                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                                                                            />
-                                                                            {uploadFile ? (
-                                                                                <div className="flex flex-col items-center gap-2">
-                                                                                    <FileText className="w-8 h-8 text-emerald-500" />
-                                                                                    <span className="text-sm font-semibold text-slate-700 truncate max-w-[200px]">{uploadFile.name}</span>
-                                                                                    <Button variant="link" onClick={() => setUploadFile(null)} className="text-red-500 h-auto p-0 text-xs">Remover arquivo</Button>
+                                                                        {docData?.fileUrl && !uploadFile && (
+                                                                            <div className="flex flex-col gap-3 p-4 rounded-xl border border-emerald-100 bg-emerald-50/50">
+                                                                                <div className="flex items-center gap-2 text-emerald-700 font-bold text-sm">
+                                                                                    <CheckCircle2 className="w-5 h-5" />
+                                                                                    Arquivo já se encontra
                                                                                 </div>
-                                                                            ) : (
-                                                                                <Button variant="outline" className="cursor-pointer border-dashed border-2 rounded-xl text-slate-600 font-bold" onClick={() => docInputRef.current?.click()}>
-                                                                                    <Upload className="w-4 h-4 mr-2" /> Selecionar Arquivo
+                                                                                <Button
+                                                                                    variant="outline"
+                                                                                    size="sm"
+                                                                                    className="w-fit cursor-pointer bg-white border-emerald-200 text-emerald-700 hover:bg-emerald-100 rounded-lg"
+                                                                                    onClick={() => docInputRef.current?.click()}
+                                                                                >
+                                                                                    Trocar arquivo
                                                                                 </Button>
+                                                                            </div>
+                                                                        )}
+
+                                                                        {(!docData?.fileUrl || uploadFile) && (
+                                                                            <div className="flex flex-col items-center justify-center border-2 border-dashed border-slate-200 rounded-xl p-6 bg-slate-50">
+                                                                                <input
+                                                                                    type="file"
+                                                                                    className="hidden"
+                                                                                    ref={docInputRef}
+                                                                                    onChange={(e) => handleSelect(e.target.files)}
+                                                                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                                                                                />
+                                                                                {uploadFile ? (
+                                                                                    <div className="flex flex-col items-center gap-2 w-full">
+                                                                                        <FileText className="w-8 h-8 text-emerald-500" />
+                                                                                        <span className="text-sm font-semibold text-slate-700 truncate max-w-full">{uploadFile.name}</span>
+                                                                                        <Button variant="link" onClick={() => { setUploadFile(null); setPreview(null); }} className="text-red-500 h-auto p-0 text-xs">Remover arquivo</Button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <Button variant="outline" className="cursor-pointer border-dashed border-2 rounded-xl text-slate-600 font-bold" onClick={() => docInputRef.current?.click()}>
+                                                                                        <Upload className="w-4 h-4 mr-2" /> Selecionar Arquivo
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
+                                                                        )}
+
+                                                                        <section className="space-y-4">
+                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-sm font-bold text-slate-700">Data de emissão</Label>
+                                                                                    <Input
+                                                                                        type="date"
+                                                                                        className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
+                                                                                        value={issuedAt}
+                                                                                        onChange={(e) => setIssuedAt(e.target.value)}
+                                                                                    />
+                                                                                </div>
+
+                                                                                <div className="space-y-1.5">
+                                                                                    <Label className="text-sm font-bold text-slate-700">Data de vencimento</Label>
+                                                                                    <Input
+                                                                                        disabled={!expire}
+                                                                                        type="date"
+                                                                                        className="h-11 rounded-xl bg-slate-50/50 border-slate-200 disabled:opacity-50"
+                                                                                        value={expireAt}
+                                                                                        onChange={(e) => setExpireAt(e.target.value)}
+                                                                                    />
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-3 justify-end pt-2">
+                                                                                <p className="text-sm font-medium text-slate-500">Este documento tem validade?</p>
+                                                                                <Switch onCheckedChange={(value) => setExpire(value)} checked={expire} className="cursor-pointer" />
+                                                                            </div>
+
+                                                                            {docData?.fileUrl && (
+                                                                                <div className="flex justify-end pt-2">
+                                                                                    <Button
+                                                                                        variant="ghost"
+                                                                                        size="sm"
+                                                                                        className="text-red-500 hover:text-red-600 hover:bg-red-50 gap-2 h-auto py-1 px-2 text-xs font-bold cursor-pointer"
+                                                                                        onClick={async () => {
+                                                                                            if (confirm("Tem certeza que deseja remover o arquivo deste documento?")) {
+                                                                                                const vid = isAdditional ? docData?.id : docData?.id
+                                                                                                setUploadLoading(true)
+                                                                                                try {
+                                                                                                    await updateCompanyDocument({
+                                                                                                        id: vid,
+                                                                                                        companyId: company_selected?.id || localStorage.getItem('company_id') || '',
+                                                                                                        type: type,
+                                                                                                        clear: true
+                                                                                                    })
+                                                                                                    toast.success("Arquivo removido com sucesso!")
+                                                                                                    setDocsLoading(true)
+                                                                                                    const updatedDocs = await getCompanyDocuments(company_selected?.id || localStorage.getItem('company_id') || '')
+                                                                                                    setDocuments(updatedDocs)
+                                                                                                    dialogCloseRef.current?.click()
+                                                                                                } catch (error) {
+                                                                                                    toast.error("Erro ao remover arquivo.")
+                                                                                                } finally {
+                                                                                                    setUploadLoading(false)
+                                                                                                    setDocsLoading(false)
+                                                                                                }
+                                                                                            }
+                                                                                        }}
+                                                                                    >
+                                                                                        <Trash2 className="size-3" /> Zerar arquivo
+                                                                                    </Button>
+                                                                                </div>
                                                                             )}
-                                                                        </div>
+                                                                        </section>
 
-
-                                                                        <div className="flex gap-2 pt-4">
-                                                                            <DialogTrigger asChild>
-                                                                                <Button variant="outline" className="flex-1 rounded-xl cursor-pointer" ref={dialogCloseRef as any}>
-                                                                                    Cancelar
-                                                                                </Button>
-                                                                            </DialogTrigger>
-                                                                            <Button onClick={() => {
-                                                                                if (isAdditional && docData?.id) {
-                                                                                    handleUploadDocument(docData.id)
-                                                                                } else {
-                                                                                    handleUploadDocument()
-                                                                                }
-                                                                            }} disabled={!uploadFile || uploadLoading} className="flex-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer">
+                                                                        <div className="flex gap-2">
+                                                                            <Button variant="outline" onClick={() => dialogCloseRef.current?.click()} className="flex-1 py-6! rounded-xl cursor-pointer">
+                                                                                Cancelar
+                                                                            </Button>
+                                                                            <Button
+                                                                                onClick={() => {
+                                                                                    const vid = isAdditional ? docData?.id : docData?.id
+                                                                                    handleUploadDocument(vid, docData?.fileUrl)
+                                                                                }}
+                                                                                disabled={(!uploadFile && !docData?.fileUrl) || uploadLoading}
+                                                                                className="flex-1 py-6! rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                                                                            >
                                                                                 {uploadLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                                                                                Salvar
+                                                                                Salvar Alterações
                                                                             </Button>
                                                                         </div>
+                                                                        <DialogClose ref={dialogCloseRef} className="hidden" />
                                                                     </div>
                                                                 </DialogContent>
                                                             </Dialog>
-                                                        )}
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             )
