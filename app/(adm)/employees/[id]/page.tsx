@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin } from "lucide-react"
+import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin, CheckCircle2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
@@ -219,29 +219,41 @@ export default function EmployeeProfilePage() {
     setPreview(URL.createObjectURL(selected))
   }
 
-  const handleUploadImage = async (id: string) => {
-
+  const handleUploadImage = async (id: string, currentFileUrl?: string | null) => {
     setLoading(true)
     try {
-      const uploaded: any = await uploadImage(file!).catch(() => {
-        toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
-        return null
-      })
+      let fileUrl = currentFileUrl
 
-      if (!uploaded) {
+      if (file) {
+        const uploaded: any = await uploadImage(file).catch(() => {
+          toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+          return null
+        })
+
+        if (!uploaded) {
+          setLoading(false)
+          return
+        }
+        fileUrl = uploaded.url
+      }
+
+      if (!fileUrl && !file) {
+        toast.warning("Selecione um arquivo para este documento")
         setLoading(false)
         return
       }
 
       const response = await updateEmployeeDocument({
-        fileUrl: uploaded.url,
+        fileUrl: fileUrl || undefined,
         id,
         issuedAt: docIssuedAt || undefined,
         expiresAt: docExpiresAt || undefined,
       }, employee.id)
 
       if (response) {
-        toast.success('arquivos enviados com sucesso')
+        toast.success('Documento atualizado com sucesso')
+        setFile(null)
+        setPreview(null)
         closeEditDocModal.current?.click()
       }
 
@@ -252,21 +264,32 @@ export default function EmployeeProfilePage() {
     }
   }
 
-  const handleUploadTraining = async (id: string) => {
+  const handleUploadTraining = async (id: string, currentFileUrl?: string | null) => {
     setLoading(true)
     try {
-      const uploaded: any = await uploadImage(file!).catch(() => {
-        toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
-        return null
-      })
+      let fileUrl = currentFileUrl
 
-      if (!uploaded) {
+      if (file) {
+        const uploaded: any = await uploadImage(file).catch(() => {
+          toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+          return null
+        })
+
+        if (!uploaded) {
+          setLoading(false)
+          return
+        }
+        fileUrl = uploaded.url
+      }
+
+      if (!fileUrl && !file) {
+        toast.warning("Selecione um arquivo para este treinamento")
         setLoading(false)
         return
       }
 
       const response = await updateTraining({
-        fileUrl: uploaded.url,
+        fileUrl: fileUrl || undefined,
         id,
         issuedAt: trainingIssuedAt || undefined,
         expiresAt: trainingExpiresAt || undefined,
@@ -274,6 +297,8 @@ export default function EmployeeProfilePage() {
 
       if (response) {
         toast.success('Treinamento atualizado com sucesso')
+        setFile(null)
+        setPreview(null)
         setTrainingIssuedAt('')
         setTrainingExpiresAt('')
         setTrainingExpire(false)
@@ -912,13 +937,29 @@ export default function EmployeeProfilePage() {
                                         />
 
                                         <div className="flex flex-col gap-2">
-                                          <Button
-                                            variant="outline"
-                                            className="w-fit cursor-pointer"
-                                            onClick={() => inputRef.current?.click()}
-                                          >
-                                            Selecionar arquivo
-                                          </Button>
+                                          {doc.fileUrl && !file ? (
+                                            <div className="space-y-3">
+                                              <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
+                                                <CheckCircle2 className="w-5 h-5" />
+                                                <span>Arquivo já se encontra</span>
+                                              </div>
+                                              <Button
+                                                variant="outline"
+                                                className="w-fit cursor-pointer h-9 text-xs"
+                                                onClick={() => inputRef.current?.click()}
+                                              >
+                                                Selecionar outro arquivo
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              className="w-fit cursor-pointer"
+                                              onClick={() => inputRef.current?.click()}
+                                            >
+                                              {file ? "Trocar arquivo" : "Selecionar arquivo"}
+                                            </Button>
+                                          )}
 
                                           <p className="text-xs text-muted-foreground">
                                             Formatos aceitos: PDF, Word, Excel e PowerPoint
@@ -969,7 +1010,7 @@ export default function EmployeeProfilePage() {
                                           <Button
                                             className="cursor-pointer gap-2"
                                             disabled={loading}
-                                            onClick={() => handleUploadImage(doc.id)}
+                                            onClick={() => handleUploadImage(doc.id, doc.fileUrl)}
                                           >
                                             Salvar alterações
                                             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -1256,13 +1297,29 @@ export default function EmployeeProfilePage() {
                                         />
 
                                         <div className="flex flex-col gap-2">
-                                          <Button
-                                            variant="outline"
-                                            className="w-fit cursor-pointer"
-                                            onClick={() => inputRef.current?.click()}
-                                          >
-                                            Selecionar arquivo
-                                          </Button>
+                                          {training.fileUrl && !file ? (
+                                            <div className="space-y-3">
+                                              <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
+                                                <CheckCircle2 className="w-5 h-5" />
+                                                <span>Arquivo já se encontra</span>
+                                              </div>
+                                              <Button
+                                                variant="outline"
+                                                className="w-fit cursor-pointer h-9 text-xs"
+                                                onClick={() => inputRef.current?.click()}
+                                              >
+                                                Selecionar outro arquivo
+                                              </Button>
+                                            </div>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              className="w-fit cursor-pointer"
+                                              onClick={() => inputRef.current?.click()}
+                                            >
+                                              {file ? "Trocar arquivo" : "Selecionar arquivo"}
+                                            </Button>
+                                          )}
                                           <p className="text-xs text-muted-foreground">
                                             Formatos aceitos: PDF, Word, Excel e PowerPoint
                                           </p>
@@ -1323,7 +1380,7 @@ export default function EmployeeProfilePage() {
                                           <Button
                                             className="cursor-pointer gap-2"
                                             disabled={loading}
-                                            onClick={() => handleUploadTraining(training.id)}
+                                            onClick={() => handleUploadTraining(training.id, training.fileUrl)}
                                           >
                                             Salvar alterações
                                             {loading && <Loader2 className="w-4 h-4 animate-spin" />}
