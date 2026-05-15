@@ -4,9 +4,6 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest) {
     try {
-        const userId = await getServerUserId(req)
-        if (!userId) return unauthorizedResponse()
-
         const body = await req.json()
         const employeeId = body.id
 
@@ -18,16 +15,20 @@ export async function POST(req: NextRequest) {
                 contract: true,
                 trainings: true,
                 documents: true,
-                costCenter: true
+                costCenter: true,
+                company: {
+                    select: {
+                        id: true,
+                        name: true,
+                        imageUrl: true
+                    }
+                }
             }
         })
 
         if (!employee) {
             return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
         }
-
-        const hasAccess = await validateCompanyAccess(userId, employee.companyId)
-        if (!hasAccess) return forbiddenResponse()
 
         return NextResponse.json(employee)
     } catch (error) {

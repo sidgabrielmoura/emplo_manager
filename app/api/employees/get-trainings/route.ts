@@ -5,9 +5,6 @@ import { updateExpiredStatuses } from "@/lib/docs"
 
 export async function POST(req: NextRequest) {
     try {
-        const userId = await getServerUserId(req)
-        if (!userId) return unauthorizedResponse()
-
         const body = await req.json()
         const employeeId = body.employee_id
 
@@ -27,8 +24,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
         }
  
-        const hasAccess = await validateCompanyAccess(userId, employee.companyId)
-        if (!hasAccess) return forbiddenResponse()
+  
  
         
         await updateExpiredStatuses(employee.companyId)

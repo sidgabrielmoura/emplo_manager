@@ -17,6 +17,13 @@ export function GuardProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const checkInitialAuth = async () => {
             const isSuperAdminRoute = pathname.startsWith("/superadmin")
+            const isPassportViewRoute = pathname.startsWith("/passport/view/")
+
+            if (isPassportViewRoute) {
+                setIsInitialAuthDone(true)
+                return
+            }
+
             try {
                 if (isSuperAdminRoute) {
                     const { superAdminAuth } = await import("@/actions/requests")
@@ -39,6 +46,9 @@ export function GuardProvider({ children }: { children: ReactNode }) {
         const handleGuarding = async () => {
             const isSuperAdminRoute = pathname.startsWith("/superadmin")
             const isLoginRoute = pathname === "/login" || pathname === "/superadmin/login"
+            const isPassportViewRoute = pathname.startsWith("/passport/view/")
+
+            if (isPassportViewRoute) return
 
             let currentUser = userStore.user
             const companyId = localStorage.getItem('company_id')

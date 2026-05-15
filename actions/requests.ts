@@ -403,6 +403,9 @@ export async function showEmployee(id: string) {
         )
 
         useEmployeesStore.show_employee = data
+        if (data.company && !useCompanyStore.company_selected) {
+            useCompanyStore.company_selected = data.company
+        }
 
         return data
     } catch (error) {

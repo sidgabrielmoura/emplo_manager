@@ -140,11 +140,14 @@ export default function PassportViewPage() {
     return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-10 font-sans text-slate-900 pb-20">
             <div className="w-full mx-auto mb-8 flex justify-between items-center print:hidden">
-                <Link href="/passport">
-                    <Button variant="ghost" className="gap-2 text-slate-600 hover:text-slate-900 transition-colors">
-                        <ArrowLeft className="w-4 h-4" /> Voltar
-                    </Button>
-                </Link>
+                {user && (
+                    <Link href="/passport">
+                        <Button variant="ghost" className="gap-2 text-slate-600 hover:text-slate-900 transition-colors">
+                            <ArrowLeft className="w-4 h-4" /> Voltar
+                        </Button>
+                    </Link>
+                )}
+                {!user && <div />}
                 <Button onClick={() => window.print()} className="gap-2 bg-slate-900 hover:bg-slate-800 text-white shadow-sm transition-all shadow-slate-200 h-10 px-4 rounded-xl font-bold">
                     <Printer className="w-4 h-4" /> Imprimir
                 </Button>

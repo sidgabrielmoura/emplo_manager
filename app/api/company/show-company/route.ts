@@ -4,13 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest) {
     try {
-        const userId = await getServerUserId(req)
-        if (!userId) return unauthorizedResponse()
-
         const { id } = await req.json()
 
-        const hasAccess = await validateCompanyAccess(userId, id)
-        if (!hasAccess) return forbiddenResponse()
 
         const response = await db.company.findFirst({
             where: {
