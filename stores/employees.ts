@@ -1,4 +1,4 @@
-import { Document, Employee, Prisma, Training } from "@/lib/generated/prisma/client";
+import { CostCenter, Document, Employee, Prisma, Training } from "@/lib/generated/prisma/client";
 import { proxy } from "valtio";
 
 type EmployeeWithComplements = Prisma.EmployeeGetPayload<{
@@ -13,7 +13,7 @@ type EmployeeWithComplements = Prisma.EmployeeGetPayload<{
 }>
 
 export const useEmployeesStore = proxy({
-    employees: null as Employee[] | null,
+    employees: null as (Employee & { costCenter?: CostCenter | null })[] | null,
     employee_documents: null as Document[] | null,
     employee_trainings: null as Training[] | null,
     show_employee: null as EmployeeWithComplements | null,

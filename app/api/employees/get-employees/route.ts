@@ -15,6 +15,9 @@ export async function POST(req: NextRequest) {
         const response = await db.employee.findMany({
             where: {
                 companyId
+            },
+            include: {
+                costCenter: true
             }
         })
 

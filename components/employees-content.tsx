@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { StatusBadge } from "@/components/status-badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
-import { Plus, Search, Eye, Briefcase, IdCard, Mail, RotateCw, FileDown, Users, Loader2 } from "lucide-react"
+import { Plus, Search, Eye, Briefcase, IdCard, Mail, RotateCw, FileDown, Users, Loader2, Building2 } from "lucide-react"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
 import { downloadEmployeeZip, getEmployees } from "@/actions/requests"
@@ -116,9 +116,13 @@ export function EmployeesContent() {
                     <Skeleton className="h-3 w-20" />
                     <Skeleton className="h-4 w-24" />
                   </div>
-                  <div className="space-y-2 col-span-2">
+                  <div className="space-y-2">
                     <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-4 w-40" />
+                  </div>
+                  <div className="space-y-2">
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-4 w-32" />
                   </div>
                 </div>
 
@@ -175,16 +179,24 @@ export function EmployeesContent() {
                   <div className="space-y-1">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cargo Atual</p>
                     <div className="flex items-center gap-1.5 font-bold text-slate-600 text-xs truncate">
-                      <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                      {employee.position}
+                      <Briefcase className="w-3.5 h-3.5 text-slate-400 animate-none shrink-0" />
+                      <span className="truncate">{employee.position}</span>
                     </div>
                   </div>
 
-                  <div className="space-y-1 col-span-2">
+                  <div className="space-y-1">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">E-mail Operacional</p>
-                    <div className="flex items-center gap-1.5 font-bold text-slate-600 text-xs truncate">
-                      <Mail className="w-3.5 h-3.5 text-slate-400" />
-                      {employee.email}
+                    <div className="flex items-center gap-1.5 font-bold text-slate-600 text-xs truncate" title={employee.email}>
+                      <Mail className="w-3.5 h-3.5 text-slate-400 animate-none shrink-0" />
+                      <span className="truncate">{employee.email}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Centro de Custo</p>
+                    <div className="flex items-center gap-1.5 font-bold text-slate-600 text-xs truncate" title={employee.costCenter?.name || "Não informado"}>
+                      <Building2 className="w-3.5 h-3.5 text-slate-400 animate-none shrink-0" />
+                      <span className="truncate">{employee.costCenter?.name || "Não informado"}</span>
                     </div>
                   </div>
                 </div>
