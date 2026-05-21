@@ -129,11 +129,13 @@ export default function PassportViewPage() {
     }
 
 
-    const monitoringItems = (trainings || []).map(t => ({
-        name: TRAININGS_PT_BR[t.type] || t.type.replaceAll("_", " "),
-        status: t.status,
-        expiry: t.expiresAt ? getDaysRemaining(t.expiresAt) : "—"
-    }))
+    const monitoringItems = (trainings || [])
+        .filter((t: any) => t.isEnabled !== false)
+        .map((t: any) => ({
+            name: t.type === "CUSTOM" ? (t.name || "Treinamento personalizado") : (TRAININGS_PT_BR[t.type] || t.type.replaceAll("_", " ")),
+            status: t.status,
+            expiry: t.expiresAt ? getDaysRemaining(t.expiresAt) : "—"
+        }))
 
     const allApproved = monitoringItems.every(item => item.status === "APPROVED")
 
