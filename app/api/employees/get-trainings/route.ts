@@ -50,19 +50,14 @@ export async function POST(req: NextRequest) {
  
         
         
-        const activeRealTrainings = trainings.filter(t => {
-            if (t.type !== "CUSTOM") {
-                const disabledDocs = (employee.company.disabledDocuments as string[]) || []
-                return !disabledDocs.includes(t.type)
-            }
-            return requirements.some(req => req.name === t.name);
-        });
+        // Keep all real trainings belonging to this employee.
+        // We do not filter them out even if they aren't in the global required checklist,
+        // because the admin can add specific trainings for this specific employee on the fly.
+        const mergedTrainings = [...trainings]
 
-        const mergedTrainings = [...activeRealTrainings]
-
-        
+        // Add virtual trainings for any required trainings that don't exist in the database yet
         requirements.forEach(req => {
-            const exists = activeRealTrainings.find(t => t.type === "CUSTOM" && t.name === req.name)
+            const exists = trainings.find(t => t.type === "CUSTOM" && t.name === req.name)
             if (!exists) {
                 mergedTrainings.push({
                     id: `virtual-${req.id}`,
@@ -75,10 +70,12 @@ export async function POST(req: NextRequest) {
                     employeeId: employeeId,
                     createdAt: new Date(),
                     updatedAt: new Date(),
-                    deletedAt: null
+                    deletedAt: null,
+                    isEnabled: true // Defaults to enabled
                 } as any)
             }
         })
+
 
         return NextResponse.json(mergedTrainings)
     } catch (error) {

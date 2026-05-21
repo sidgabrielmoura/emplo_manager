@@ -40,16 +40,27 @@ export async function POST(req: NextRequest) {
             })
         ])
 
-        
-        
         const activeRealDocs = documents.filter(doc => {
             if (doc.type !== "CUSTOM") return true;
             return requirements.some(req => req.name === doc.name);
         });
 
-        const mergedDocuments = [...activeRealDocs]
+        // Map real documents and attach their corresponding targets
+        const mergedDocuments = activeRealDocs.map(doc => {
+            if (doc.type === "CUSTOM") {
+                const req = requirements.find(r => r.name === doc.name)
+                return {
+                    ...doc,
+                    target: req ? req.target : "COMPANY_DOC"
+                }
+            }
+            return {
+                ...doc,
+                target: "COMPANY_DOC" // standard docs defaults to company docs
+            }
+        })
 
-        
+        // Add virtual documents for any requirements that are not physically present
         requirements.forEach(req => {
             const exists = activeRealDocs.find(d => d.type === "CUSTOM" && d.name === req.name)
             if (!exists) {
@@ -64,7 +75,8 @@ export async function POST(req: NextRequest) {
                     companyId: companyId,
                     createdAt: new Date(),
                     updatedAt: new Date(),
-                    deletedAt: null
+                    deletedAt: null,
+                    target: req.target
                 } as any)
             }
         })

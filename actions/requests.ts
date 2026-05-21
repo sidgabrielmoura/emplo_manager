@@ -1119,3 +1119,122 @@ export async function getCostCenterDetails(id: string) {
         throw error
     }
 }
+
+export async function addEmployeeDocument(payload: { employeeId: string; name: string }) {
+    try {
+        const { data } = await axios.post(
+            '/employees/add-document',
+            payload,
+            { baseURL: base_url }
+        )
+        await getDocsOfEmployee(payload.employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function toggleEmployeeDocumentStatus(payload: { employeeId: string; documentId: string; isEnabled: boolean }) {
+    try {
+        const { data } = await axios.put(
+            '/employees/toggle-document-status',
+            payload,
+            { baseURL: base_url }
+        )
+        await getDocsOfEmployee(payload.employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function getCompanyRequiredDocumentsAdmin(companyId: string) {
+    try {
+        const { data } = await axios.get(
+            `/company/required-documents?companyId=${companyId}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function addCompanyRequiredDocumentAdmin(payload: {
+    companyId: string,
+    name: string,
+    target: 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+    validityDays?: string | number,
+    isEnabled?: boolean
+}) {
+    try {
+        const { data } = await axios.post(
+            '/company/required-documents',
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function updateCompanyRequiredDocumentAdmin(payload: {
+    id: string,
+    name?: string,
+    target?: 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+    validityDays?: string | number,
+    isEnabled?: boolean
+}) {
+    try {
+        const { data } = await axios.put(
+            '/company/required-documents',
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function deleteCompanyRequiredDocumentAdmin(id: string) {
+    try {
+        const { data } = await axios.delete(
+            `/company/required-documents?id=${id}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function addEmployeeTraining(payload: { employeeId: string; name: string }) {
+    try {
+        const { data } = await axios.post(
+            '/employees/add-training',
+            payload,
+            { baseURL: base_url }
+        )
+        await getTrainings(payload.employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function toggleEmployeeTrainingStatus(payload: { employeeId: string; trainingId: string; isEnabled: boolean }) {
+    try {
+        const { data } = await axios.put(
+            '/employees/toggle-training-status',
+            payload,
+            { baseURL: base_url }
+        )
+        await getTrainings(payload.employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+

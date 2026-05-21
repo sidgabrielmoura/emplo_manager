@@ -1,0 +1,74 @@
+import db from "@/lib/prisma"
+import { forbiddenResponse, getServerUserId, unauthorizedResponse, validateCompanyAccess } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
+
+export async function POST(req: NextRequest) {
+    try {
+        const userId = await getServerUserId(req)
+        if (!userId) return unauthorizedResponse()
+
+        const body = await req.json()
+        const { employeeId, name } = body
+
+        if (!employeeId || !name || !name.trim()) {
+            return NextResponse.json({ error: "Funcionário e nome do treinamento são obrigatórios" }, { status: 400 })
+        }
+
+        const employee = await db.employee.findUnique({
+            where: { id: employeeId },
+            select: { companyId: true }
+        })
+
+        if (!employee) {
+            return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
+        }
+
+        const hasAccess = await validateCompanyAccess(userId, employee.companyId)
+        if (!hasAccess) return forbiddenResponse()
+
+        const trainingName = name.trim()
+
+        // Check if a training with this name already exists for this employee
+        const existingTraining = await db.training.findUnique({
+            where: {
+                employeeId_type_name: {
+                    employeeId,
+                    type: "CUSTOM",
+                    name: trainingName
+                }
+            }
+        })
+
+        if (existingTraining) {
+            if (existingTraining.deletedAt !== null) {
+                // Restore deleted training
+                const restoredTraining = await db.training.update({
+                    where: { id: existingTraining.id },
+                    data: {
+                        deletedAt: null,
+                        isEnabled: true,
+                        status: "PENDING"
+                    }
+                })
+                return NextResponse.json(restoredTraining)
+            }
+
+            return NextResponse.json({ error: "Este treinamento já está adicionado para este funcionário" }, { status: 400 })
+        }
+
+        const newTraining = await db.training.create({
+            data: {
+                employeeId,
+                type: "CUSTOM",
+                name: trainingName,
+                status: "PENDING",
+                isEnabled: true
+            }
+        })
+
+        return NextResponse.json(newTraining)
+    } catch (error) {
+        console.error("ADD TRAINING ERROR:", error)
+        return NextResponse.json({ error: "Erro interno" }, { status: 500 })
+    }
+}

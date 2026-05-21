@@ -81,21 +81,46 @@ export async function POST(req: NextRequest) {
             }
         })
 
-        await db.document.createMany({
-            data: Object.values(DocumentType).map((type) => ({
-                employeeId: employee.id,
-                type
-            })),
-            skipDuplicates: true
+        const defaultDocs = await db.companyRequiredDocument.findMany({
+            where: {
+                companyId: body.companyId,
+                target: "EMPLOYEE_DOC",
+                isEnabled: true
+            }
         })
 
-        await db.training.createMany({
-            data: Object.values(TrainingType).map((type) => ({
-                employeeId: employee.id,
-                type
-            })),
-            skipDuplicates: true
+        if (defaultDocs.length > 0) {
+            await db.document.createMany({
+                data: defaultDocs.map((req) => ({
+                    employeeId: employee.id,
+                    type: "CUSTOM",
+                    name: req.name,
+                    isEnabled: true
+                })),
+                skipDuplicates: true
+            })
+        }
+
+        const defaultTrainings = await db.companyRequiredDocument.findMany({
+            where: {
+                companyId: body.companyId,
+                target: "EMPLOYEE_TRAINING",
+                isEnabled: true
+            }
         })
+
+        if (defaultTrainings.length > 0) {
+            await db.training.createMany({
+                data: defaultTrainings.map((req) => ({
+                    employeeId: employee.id,
+                    type: "CUSTOM",
+                    name: req.name,
+                    isEnabled: true
+                })),
+                skipDuplicates: true
+            })
+        }
+
 
         try {
             const [admins, superadmins] = await Promise.all([

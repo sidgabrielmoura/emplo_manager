@@ -32,6 +32,7 @@ export async function checkAndSendExpirationAlerts() {
                     lte: endDate,
                 },
                 status: { not: "EXPIRED" },
+                isEnabled: true,
             },
             include: {
                 employee: {
@@ -62,6 +63,7 @@ export async function checkAndSendExpirationAlerts() {
                     lte: endDate,
                 },
                 status: { not: "EXPIRED" },
+                isEnabled: true,
             },
             include: {
                 employee: {

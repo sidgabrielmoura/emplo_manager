@@ -45,8 +45,6 @@ const COMPANY_DOCS = [
   { type: 'NR16_PERICULOSIDADE', label: 'NR-16 Laudo de periculosidade' },
   { type: 'PCA_AUDITIVA', label: 'PCA (Programa de Conservação Auditiva)' },
   { type: 'PPR_RESPIRATORIA', label: 'PPR (Programa de Proteção Respiratória)' },
-  { type: 'PGR_CPFL', label: 'PGR CPFL' },
-  { type: 'PCMSO_CPFL', label: 'PCMSO CPFL' },
 ]
 
 const LABOR_DOCS = [
@@ -626,7 +624,7 @@ export default function CompanyDetailsPage() {
                           companyDocs.map((doc) => (
                             <TableRow key={doc.id} className="hover:bg-slate-50/50">
                               <TableCell className="px-6 font-bold text-slate-700 min-w-[120px] max-w-[200px] md:truncate">
-                                {doc.type === 'CUSTOM' ? doc.name : (COMPANY_DOCS.find(d => d.type === doc.type)?.label || LABOR_DOCS.find(d => d.type === doc.type)?.label || doc.type)}
+                                {doc.type === 'CUSTOM' ? (doc.name || 'Documento personalizado') : (COMPANY_DOCS.find(d => d.type === doc.type)?.label || LABOR_DOCS.find(d => d.type === doc.type)?.label || doc.type)}
                               </TableCell>
                               <TableCell className="text-center whitespace-nowrap">
                                 <Badge

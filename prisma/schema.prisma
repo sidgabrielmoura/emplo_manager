@@ -105,8 +105,6 @@ enum CompanyDocumentType {
   NR16_PERICULOSIDADE
   PCA_AUDITIVA
   PPR_RESPIRATORIA
-  PGR_CPFL
-  PCMSO_CPFL
   CRF_FGTS
   GUIA_FGTS_DIGITAL
   GUIA_DARF_PREVIDENCIARIO
@@ -282,6 +280,7 @@ model Document {
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   deletedAt DateTime?
+  isEnabled Boolean        @default(true)
 
   employee   Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   employeeId String?
@@ -300,6 +299,7 @@ model Training {
   fileUrl   String?
   issuedAt  DateTime?      @db.Date
   expiresAt DateTime?      @db.Date
+  isEnabled Boolean        @default(true)
   createdAt DateTime       @default(now())
   updatedAt DateTime       @updatedAt
   deletedAt DateTime?
@@ -312,6 +312,7 @@ model Training {
   @@index([status])
   @@index([expiresAt])
 }
+
 
 model PassportEmission {
   id         String   @id @default(uuid())

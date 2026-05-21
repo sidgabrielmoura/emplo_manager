@@ -13,7 +13,7 @@ import { useSnapshot } from "valtio"
 import { useEffect, useState } from "react"
 import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download, Pencil, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile } from "@/actions/requests"
+import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile, getCompanyRequiredDocumentsAdmin, addCompanyRequiredDocumentAdmin, updateCompanyRequiredDocumentAdmin, deleteCompanyRequiredDocumentAdmin } from "@/actions/requests"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogTrigger, DialogClose } from "@/components/ui/dialog"
@@ -35,8 +35,6 @@ const COMPANY_DOCS = [
     { type: 'NR16_PERICULOSIDADE', label: 'NR-16 Laudo de periculosidade' },
     { type: 'PCA_AUDITIVA', label: 'PCA (Programa de Conservação Auditiva)' },
     { type: 'PPR_RESPIRATORIA', label: 'PPR (Programa de Proteção Respiratória)' },
-    { type: 'PGR_CPFL', label: 'PGR CPFL' },
-    { type: 'PCMSO_CPFL', label: 'PCMSO CPFL' },
 ]
 
 const LABOR_DOCS = [
@@ -80,6 +78,95 @@ export default function CompanySettingsPage() {
         name: '', cnpj: '', email: '', phone: '', address: '', state: '', city: '', responsible: '', imageUrl: '', disabledDocuments: [] as string[]
     })
 
+    const [requiredDocs, setRequiredDocs] = useState<any[]>([])
+    const [reqDocsLoading, setReqDocsLoading] = useState(true)
+
+    const [isChecklistDialogOpen, setIsChecklistDialogOpen] = useState(false)
+    const [editingChecklist, setEditingChecklist] = useState<any | null>(null)
+    const [checklistForm, setChecklistForm] = useState({
+        name: '',
+        target: 'EMPLOYEE_DOC' as 'EMPLOYEE_DOC' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+        validityDays: '' as string | number,
+        isEnabled: true
+    })
+    const [checklistLoading, setChecklistLoading] = useState(false)
+
+    const handleSaveChecklist = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!checklistForm.name.trim()) {
+            toast.error("Por favor, preencha o nome do documento.")
+            return
+        }
+        const companyId = company_selected?.id || localStorage.getItem('company_id')
+        if (!companyId) return
+
+        setChecklistLoading(true)
+        try {
+            if (editingChecklist) {
+                await updateCompanyRequiredDocumentAdmin({
+                    id: editingChecklist.id,
+                    name: checklistForm.name.trim(),
+                    target: checklistForm.target,
+                    validityDays: checklistForm.validityDays ? Number(checklistForm.validityDays) : undefined,
+                    isEnabled: checklistForm.isEnabled
+                })
+                toast.success("Documento padrão atualizado com sucesso!")
+            } else {
+                await addCompanyRequiredDocumentAdmin({
+                    companyId,
+                    name: checklistForm.name.trim(),
+                    target: checklistForm.target,
+                    validityDays: checklistForm.validityDays ? Number(checklistForm.validityDays) : undefined,
+                    isEnabled: checklistForm.isEnabled
+                })
+                toast.success("Documento padrão criado com sucesso!")
+            }
+            
+            const data = await getCompanyRequiredDocumentsAdmin(companyId)
+            setRequiredDocs(data || [])
+            
+            setIsChecklistDialogOpen(false)
+            setEditingChecklist(null)
+            setChecklistForm({ name: '', target: 'EMPLOYEE_DOC', validityDays: '', isEnabled: true })
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao salvar documento padrão")
+        } finally {
+            setChecklistLoading(false)
+        }
+    }
+
+    const handleDeleteChecklist = async (id: string) => {
+        if (!confirm("Tem certeza que deseja excluir este documento padrão? Isso removerá o controle dele para todos os funcionários e empresa.")) return
+        const companyId = company_selected?.id || localStorage.getItem('company_id')
+        if (!companyId) return
+
+        try {
+            await deleteCompanyRequiredDocumentAdmin(id)
+            toast.success("Documento padrão excluído com sucesso!")
+            const data = await getCompanyRequiredDocumentsAdmin(companyId)
+            setRequiredDocs(data || [])
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao excluir documento padrão")
+        }
+    }
+
+    const handleToggleChecklistStatus = async (item: any, isEnabled: boolean) => {
+        const companyId = company_selected?.id || localStorage.getItem('company_id')
+        if (!companyId) return
+
+        try {
+            await updateCompanyRequiredDocumentAdmin({
+                id: item.id,
+                isEnabled
+            })
+            toast.success(isEnabled ? "Documento habilitado!" : "Documento desabilitado!")
+            const data = await getCompanyRequiredDocumentsAdmin(companyId)
+            setRequiredDocs(data || [])
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao atualizar status")
+        }
+    }
+
     useEffect(() => {
         const fetchCompanyData = async () => {
             const companyId = localStorage.getItem('company_id')
@@ -113,12 +200,17 @@ export default function CompanySettingsPage() {
                     setDocsLoading(true)
                     const updatedDocs = await getCompanyDocuments(loadedCompany.id)
                     setDocuments(updatedDocs)
+
+                    setReqDocsLoading(true)
+                    const reqDocs = await getCompanyRequiredDocumentsAdmin(loadedCompany.id)
+                    setRequiredDocs(reqDocs || [])
                 }
             } catch (error) {
                 console.error("Failed to load company data", error)
                 router.push('/dashboard')
             } finally {
                 setDocsLoading(false)
+                setReqDocsLoading(false)
             }
         }
 
@@ -504,6 +596,125 @@ export default function CompanySettingsPage() {
         )
     }
 
+    const activeCompanyDocs = [
+        ...COMPANY_DOCS.filter(d => {
+            const req = requiredDocs.find(r => r.name === d.label || r.id === d.type);
+            return req ? req.isEnabled !== false : true;
+        }),
+        ...requiredDocs.filter(r => r.target === 'COMPANY_DOC' && r.isEnabled !== false && !COMPANY_DOCS.some(d => d.label === r.name)).map(r => ({
+            type: r.id,
+            label: r.name
+        }))
+    ];
+
+    const activeLaborDocs = [
+        ...LABOR_DOCS.filter(d => {
+            const req = requiredDocs.find(r => r.name === d.label || r.id === d.type);
+            return req ? req.isEnabled !== false : true;
+        }),
+        ...requiredDocs.filter(r => r.target === 'COMPANY_LABOR' && r.isEnabled !== false && !LABOR_DOCS.some(d => d.label === r.name)).map(r => ({
+            type: r.id,
+            label: r.name
+        }))
+    ];
+
+    const renderChecklistManagerTable = (targetType: 'EMPLOYEE_DOC' | 'COMPANY_DOC' | 'COMPANY_LABOR', title: string, description: string) => {
+        const items = requiredDocs.filter(r => r.target === targetType)
+        
+        return (
+            <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white mt-6">
+                <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <CardTitle className="text-slate-800 text-lg font-bold">{title}</CardTitle>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">{description}</p>
+                    </div>
+                    <Button 
+                        onClick={() => {
+                            setEditingChecklist(null)
+                            setChecklistForm({
+                                name: '',
+                                target: targetType,
+                                validityDays: '',
+                                isEnabled: true
+                            })
+                            setIsChecklistDialogOpen(true)
+                        }}
+                        className="gap-2 cursor-pointer rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
+                    >
+                        + Adicionar Novo
+                    </Button>
+                </CardHeader>
+                <CardContent className="p-6">
+                    {reqDocsLoading ? (
+                        <div className="space-y-3">
+                            <Skeleton className="h-10 w-full rounded-xl" />
+                            <Skeleton className="h-10 w-full rounded-xl" />
+                        </div>
+                    ) : items.length === 0 ? (
+                        <p className="text-slate-400 text-sm text-center py-6">Nenhum documento padrão cadastrado para este checklist.</p>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Nome do Documento</TableHead>
+                                    <TableHead className="w-40! text-center">Validade (dias)</TableHead>
+                                    <TableHead className="w-32! text-center">Habilitado</TableHead>
+                                    <TableHead className="w-32! text-right">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {items.map((item) => (
+                                    <TableRow key={item.id}>
+                                        <TableCell className="font-semibold text-slate-700">{item.name}</TableCell>
+                                        <TableCell className="text-center text-slate-500 tabular-nums">
+                                            {item.validityDays ? `${item.validityDays} dias` : "Sem expiração"}
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Switch
+                                                checked={item.isEnabled !== false}
+                                                onCheckedChange={(checked) => handleToggleChecklistStatus(item, checked)}
+                                                className="cursor-pointer mx-auto"
+                                            />
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="size-8 p-0 cursor-pointer rounded-lg hover:bg-amber-50 hover:text-amber-600 text-slate-400"
+                                                    onClick={() => {
+                                                        setEditingChecklist(item)
+                                                        setChecklistForm({
+                                                            name: item.name,
+                                                            target: item.target,
+                                                            validityDays: item.validityDays || '',
+                                                            isEnabled: item.isEnabled !== false
+                                                        })
+                                                        setIsChecklistDialogOpen(true)
+                                                    }}
+                                                >
+                                                    <Pencil className="size-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                                    onClick={() => handleDeleteChecklist(item.id)}
+                                                >
+                                                    <Trash2 className="size-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                </CardContent>
+            </Card>
+        )
+    }
+
     if (!form.name && !company_selected) return null
 
     return (
@@ -529,6 +740,9 @@ export default function CompanySettingsPage() {
                     <TabsList className="bg-white border shadow-sm p-1 rounded-2xl h-auto flex flex-wrap gap-1 sticky top-0 z-10">
                         <TabsTrigger value="details" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
                             Dados Gerais
+                        </TabsTrigger>
+                        <TabsTrigger value="standard-docs" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
+                            Documentos Padrão (Checklists)
                         </TabsTrigger>
                         <TabsTrigger value="company-docs" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
                             Documentos da Empresa
@@ -617,13 +831,25 @@ export default function CompanySettingsPage() {
                         </Card>
                     </TabsContent>
 
-                    <TabsContent value="company-docs" className="mt-8 space-y-8">
-                        {renderDocumentTable(COMPANY_DOCS.filter(d => !(form.disabledDocuments || []).includes(d.type)))}
+                    <TabsContent value="standard-docs" className="mt-8 space-y-6">
+                        <div className="bg-emerald-50/50 border border-emerald-100 rounded-3xl p-6 mb-2">
+                            <h2 className="text-emerald-800 font-bold text-lg mb-1">Checklists e Documentos Padrão</h2>
+                            <p className="text-slate-600 text-sm">
+                                Configure aqui quais documentos são obrigatórios para a admissão de novos funcionários, para a própria empresa e para obrigações trabalhistas mensais. Novos funcionários começarão somente com os itens habilitados.
+                            </p>
+                        </div>
+                        {renderChecklistManagerTable('EMPLOYEE_DOC', 'Checklist de Admissão (Funcionários)', 'Documentação exigida para novos funcionários')}
+                        {renderChecklistManagerTable('COMPANY_DOC', 'Checklist Corporativo (Empresa)', 'Documentação de segurança e fiscalização da empresa')}
+                        {renderChecklistManagerTable('COMPANY_LABOR', 'Checklist Mensal Trabalhista', 'Obrigações trabalhistas e guias de recolhimento')}
+                    </TabsContent>
 
-                        {documents.filter(d => d.type === 'CUSTOM').length > 0 && (
+                    <TabsContent value="company-docs" className="mt-8 space-y-8">
+                        {renderDocumentTable(activeCompanyDocs)}
+
+                        {documents.filter(d => d.type === 'CUSTOM' && !activeCompanyDocs.some(ac => ac.label === d.name)).length > 0 && (
                             renderDocumentTable(
                                 documents
-                                    .filter(d => d.type === 'CUSTOM')
+                                    .filter(d => d.type === 'CUSTOM' && !activeCompanyDocs.some(ac => ac.label === d.name))
                                     .map(d => ({ type: 'CUSTOM', label: d.name })),
                                 true
                             )
@@ -631,10 +857,77 @@ export default function CompanySettingsPage() {
                     </TabsContent>
 
                     <TabsContent value="labor-docs" className="mt-8">
-                        {renderDocumentTable(LABOR_DOCS.filter(d => !(form.disabledDocuments || []).includes(d.type)))}
+                        {renderDocumentTable(activeLaborDocs)}
                     </TabsContent>
                 </Tabs>
             </div>
+
+            <Dialog open={isChecklistDialogOpen} onOpenChange={setIsChecklistDialogOpen}>
+                <DialogContent className="max-w-md w-full rounded-2xl bg-white p-6 shadow-xl border">
+                    <form onSubmit={handleSaveChecklist} className="space-y-4">
+                        <h3 className="font-bold text-lg text-slate-800">
+                            {editingChecklist ? "Editar Documento Padrão" : "Adicionar Documento Padrão"}
+                        </h3>
+                        
+                        <div className="space-y-1.5">
+                            <Label className="text-sm font-bold text-slate-700">Nome do Documento</Label>
+                            <Input
+                                placeholder="Ex: CNH, ASO, Certidão de Nascimento..."
+                                value={checklistForm.name}
+                                onChange={(e) => setChecklistForm({ ...checklistForm, name: e.target.value })}
+                                className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
+                            />
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                            <Label className="text-sm font-bold text-slate-700">Categoria (Alvo)</Label>
+                            <select
+                                value={checklistForm.target}
+                                onChange={(e: any) => setChecklistForm({ ...checklistForm, target: e.target.value })}
+                                className="w-full h-11 rounded-xl bg-slate-50/50 border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                            >
+                                <option value="EMPLOYEE_DOC">Funcionário (Checklist de Entrada)</option>
+                                <option value="COMPANY_DOC">Empresa (Documento Corporativo)</option>
+                                <option value="COMPANY_LABOR">Trabalhistas (Obrigações Mensais)</option>
+                            </select>
+                        </div>
+                        
+                        <div className="space-y-1.5">
+                            <Label className="text-sm font-bold text-slate-700">Validade em dias (Opcional)</Label>
+                            <Input
+                                type="number"
+                                placeholder="Ex: 365 (deixe em branco se não expirar)"
+                                value={checklistForm.validityDays}
+                                onChange={(e) => setChecklistForm({ ...checklistForm, validityDays: e.target.value })}
+                                className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
+                            />
+                        </div>
+                        
+                        <div className="flex items-center gap-3 justify-between pt-2">
+                            <span className="text-sm font-medium text-slate-600">Habilitar para novos cadastros?</span>
+                            <Switch
+                                checked={checklistForm.isEnabled}
+                                onCheckedChange={(checked) => setChecklistForm({ ...checklistForm, isEnabled: checked })}
+                                className="cursor-pointer"
+                            />
+                        </div>
+                        
+                        <div className="flex gap-2 pt-4">
+                            <Button type="button" variant="outline" onClick={() => setIsChecklistDialogOpen(false)} className="flex-1 py-5 rounded-xl cursor-pointer">
+                                Cancelar
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={checklistLoading}
+                                className="flex-1 py-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
+                            >
+                                {checklistLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                                Salvar
+                            </Button>
+                        </div>
+                    </form>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     )
 }

@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
@@ -77,6 +77,66 @@ export default function EmployeeProfilePage() {
   const [trainingExpiresAt, setTrainingExpiresAt] = useState('')
   const [trainingExpire, setTrainingExpire] = useState(false)
   const [trainingsZipLoading, setTrainingsZipLoading] = useState(false)
+  const [newDocName, setNewDocName] = useState('')
+  const [isAddingDoc, setIsAddingDoc] = useState(false)
+  const [togglingDocId, setTogglingDocId] = useState<string | null>(null)
+  const [newTrainingName, setNewTrainingName] = useState('')
+  const [isAddingTraining, setIsAddingTraining] = useState(false)
+  const [togglingTrainingId, setTogglingTrainingId] = useState<string | null>(null)
+
+  const handleAddCustomDoc = async () => {
+    if (!newDocName.trim() || !employee?.id) return
+    setIsAddingDoc(true)
+    try {
+      await addEmployeeDocument({ employeeId: employee.id, name: newDocName.trim() })
+      toast.success("Documento adicionado com sucesso")
+      setNewDocName("")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao adicionar documento")
+    } finally {
+      setIsAddingDoc(false)
+    }
+  }
+
+  const handleToggleDocStatus = async (docId: string, isEnabled: boolean) => {
+    if (!employee?.id) return
+    setTogglingDocId(docId)
+    try {
+      await toggleEmployeeDocumentStatus({ employeeId: employee.id, documentId: docId, isEnabled })
+      toast.success(isEnabled ? "Documento habilitado" : "Documento desabilitado")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao atualizar status do documento")
+    } finally {
+      setTogglingDocId(null)
+    }
+  }
+
+  const handleAddCustomTraining = async () => {
+    if (!newTrainingName.trim() || !employee?.id) return
+    setIsAddingTraining(true)
+    try {
+      await addEmployeeTraining({ employeeId: employee.id, name: newTrainingName.trim() })
+      toast.success("Treinamento adicionado com sucesso")
+      setNewTrainingName("")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao adicionar treinamento")
+    } finally {
+      setIsAddingTraining(false)
+    }
+  }
+
+  const handleToggleTrainingStatus = async (trainingId: string, isEnabled: boolean) => {
+    if (!employee?.id) return
+    setTogglingTrainingId(trainingId)
+    try {
+      await toggleEmployeeTrainingStatus({ employeeId: employee.id, trainingId, isEnabled })
+      toast.success(isEnabled ? "Treinamento habilitado" : "Treinamento desabilitado")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao atualizar status do treinamento")
+    } finally {
+      setTogglingTrainingId(null)
+    }
+  }
 
   useEffect(() => {
     if (!params.id) return
@@ -802,6 +862,33 @@ export default function EmployeeProfilePage() {
               </CardHeader>
 
               <CardContent className="p-0 px-8">
+                {/* Custom Document Addition Input Group */}
+                {!docsLoading && (
+                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-6 bg-slate-50/50 border-b border-slate-100">
+                    <div className="text-sm font-semibold text-slate-700">Adicionar documento personalizado:</div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Input
+                        placeholder="Nome do documento (Ex: ASO, CNH...)"
+                        value={newDocName}
+                        onChange={(e) => setNewDocName(e.target.value)}
+                        className="max-w-xs bg-white border-slate-200"
+                        disabled={isAddingDoc}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddCustomDoc()
+                        }}
+                      />
+                      <Button
+                        onClick={handleAddCustomDoc}
+                        disabled={!newDocName.trim() || isAddingDoc}
+                        className="gap-2 shrink-0 cursor-pointer"
+                      >
+                        {isAddingDoc ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        Adicionar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {docsLoading ? (
                   <div className="p-6 space-y-4">
                     <div className="flex justify-between border-b pb-4 mb-2">
@@ -821,6 +908,7 @@ export default function EmployeeProfilePage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Documento</TableHead>
+                          <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de emissão</TableHead>
                           <TableHead className="w-40! text-center">Data de vencimento</TableHead>
@@ -838,21 +926,36 @@ export default function EmployeeProfilePage() {
                             </TableCell>
 
                             <TableCell className="text-center">
-                              <Badge
-                                variant={
-                                  doc.status === "APPROVED"
-                                    ? "default"
+                              <Switch
+                                checked={doc.isEnabled !== false}
+                                disabled={togglingDocId === doc.id}
+                                onCheckedChange={(checked) => handleToggleDocStatus(doc.id, checked)}
+                                className="cursor-pointer mx-auto"
+                              />
+                            </TableCell>
+
+                            <TableCell className="text-center">
+                              {doc.isEnabled === false ? (
+                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
+                                  Não se aplica
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant={
+                                    doc.status === "APPROVED"
+                                      ? "default"
+                                      : doc.status === "PENDING"
+                                        ? "secondary"
+                                        : "destructive"
+                                  }
+                                >
+                                  {doc.status === "APPROVED"
+                                    ? "Aprovado"
                                     : doc.status === "PENDING"
-                                      ? "secondary"
-                                      : "destructive"
-                                }
-                              >
-                                {doc.status === "APPROVED"
-                                  ? "Aprovado"
-                                  : doc.status === "PENDING"
-                                    ? "Pendente"
-                                    : "Rejeitado"}
-                              </Badge>
+                                      ? "Pendente"
+                                      : "Rejeitado"}
+                                </Badge>
+                              )}
                             </TableCell>
 
                             <TableCell className="text-center">
@@ -888,7 +991,9 @@ export default function EmployeeProfilePage() {
                             </TableCell>
 
                             <TableCell className="text-right">
-                              {doc.fileUrl ? (
+                              {doc.isEnabled === false ? (
+                                <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
+                              ) : doc.fileUrl ? (
                                 <div className="flex items-center justify-end gap-2">
                                   <Link href={doc.fileUrl} target="_blank" rel="noreferrer">
                                     <Button
@@ -1169,10 +1274,38 @@ export default function EmployeeProfilePage() {
               </CardHeader>
 
               <CardContent className="p-0 px-8">
+                {/* Custom Training Addition Input Group */}
+                {!trainingsLoading && (
+                  <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-6 bg-slate-50/50 border-b border-slate-100">
+                    <div className="text-sm font-semibold text-slate-700">Adicionar treinamento personalizado:</div>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <Input
+                        placeholder="Nome do treinamento (Ex: NR-10, NR-35...)"
+                        value={newTrainingName}
+                        onChange={(e) => setNewTrainingName(e.target.value)}
+                        className="max-w-xs bg-white border-slate-200"
+                        disabled={isAddingTraining}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleAddCustomTraining()
+                        }}
+                      />
+                      <Button
+                        onClick={handleAddCustomTraining}
+                        disabled={!newTrainingName.trim() || isAddingTraining}
+                        className="gap-2 shrink-0 cursor-pointer"
+                      >
+                        {isAddingTraining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        Adicionar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
                 {trainingsLoading ? (
                   <div className="p-6 space-y-4">
                     <div className="flex justify-between border-b pb-4 mb-2">
                       <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-4 w-24" />
                       <Skeleton className="h-4 w-12" />
@@ -1187,6 +1320,7 @@ export default function EmployeeProfilePage() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Treinamento</TableHead>
+                          <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de realização</TableHead>
                           <TableHead className="w-40! text-center">Dias para vencer</TableHead>
@@ -1200,29 +1334,44 @@ export default function EmployeeProfilePage() {
                           <TableRow key={training.id}>
                             <TableCell className="flex items-center gap-2">
                               <FileText className="w-4 h-4 text-primary" />
-                              {getPTBRDocuments(training.type)}
+                              {getPTBRDocuments(training.type, training.name ?? undefined)}
                             </TableCell>
 
                             <TableCell className="text-center">
-                              <Badge
-                                variant={
-                                  training.status === "APPROVED"
-                                    ? "default"
+                              <Switch
+                                checked={training.isEnabled !== false}
+                                disabled={togglingTrainingId === training.id}
+                                onCheckedChange={(checked) => handleToggleTrainingStatus(training.id, checked)}
+                                className="cursor-pointer mx-auto"
+                              />
+                            </TableCell>
+
+                            <TableCell className="text-center">
+                              {training.isEnabled === false ? (
+                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
+                                  Não se aplica
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant={
+                                    training.status === "APPROVED"
+                                      ? "default"
+                                      : training.status === "PENDING"
+                                        ? "secondary"
+                                        : "destructive"
+                                  }
+                                >
+                                  {training.status === "APPROVED"
+                                    ? "Aprovado"
                                     : training.status === "PENDING"
-                                      ? "secondary"
-                                      : "destructive"
-                                }
-                              >
-                                {training.status === "APPROVED"
-                                  ? "Aprovado"
-                                  : training.status === "PENDING"
-                                    ? "Pendente"
-                                    : "Rejeitado"}
-                              </Badge>
+                                      ? "Pendente"
+                                      : "Rejeitado"}
+                                </Badge>
+                              )}
                             </TableCell>
 
                             <TableCell className="text-center">
-                              {training.issuedAt
+                              {training.isEnabled === false ? "—" : training.issuedAt
                                 ? new Date(training.issuedAt).toLocaleDateString("pt-BR", {
                                   timeZone: 'UTC',
                                   day: '2-digit',
@@ -1233,7 +1382,7 @@ export default function EmployeeProfilePage() {
                             </TableCell>
 
                             <TableCell className="text-center">
-                              {training.expiresAt ? getDaysRemaining(training.expiresAt) : "—"}
+                              {training.isEnabled === false ? "—" : training.expiresAt ? getDaysRemaining(training.expiresAt) : "—"}
                             </TableCell>
 
                             <TableCell className="text-center">
@@ -1247,7 +1396,9 @@ export default function EmployeeProfilePage() {
                             </TableCell>
 
                             <TableCell className="text-right">
-                              {training.fileUrl ? (
+                              {training.isEnabled === false ? (
+                                <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
+                              ) : training.fileUrl ? (
                                 <div className="flex justify-end gap-2">
                                   <Link href={training.fileUrl} target="_blank" rel="noreferrer">
                                     <Button
@@ -1263,7 +1414,7 @@ export default function EmployeeProfilePage() {
                                     variant="outline"
                                     size="sm"
                                     className="gap-2 cursor-pointer"
-                                    onClick={() => downloadFile(training.fileUrl!, `${getPTBRDocuments(training.type)}.${training.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
+                                    onClick={() => downloadFile(training.fileUrl!, `${getPTBRDocuments(training.type, training.name ?? undefined)}.${training.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
                                   >
                                     <Download className="w-4 h-4" />
                                     Baixar

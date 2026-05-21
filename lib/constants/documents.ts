@@ -35,6 +35,6 @@ export const TRAININGS_PT_BR: Record<string, string> = {
 }
 
 export const getPTBRDocuments = (type: string, name?: string) => {
-    if (type === "CUSTOM" && name) return name
+    if (type === "CUSTOM") return name || "Documento personalizado"
     return DOCUMENTS_PT_BR[type] || TRAININGS_PT_BR[type] || type.replaceAll("_", " ")
 }

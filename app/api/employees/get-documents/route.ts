@@ -38,21 +38,14 @@ export async function POST(req: NextRequest) {
             })
         ])
 
-        
-        
-        const activeRealDocs = documents.filter(doc => {
-            if (doc.type !== "CUSTOM") {
-                const disabledDocs = (employee.company.disabledDocuments as string[]) || []
-                return !disabledDocs.includes(doc.type)
-            }
-            return requirements.some(req => req.name === doc.name);
-        });
+        // Keep all real documents belonging to this employee.
+        // We do not filter them out even if they aren't in the global required checklist,
+        // because the admin can add specific documents for this specific employee.
+        const mergedDocuments = [...documents]
 
-        const mergedDocuments = [...activeRealDocs]
-
-        
+        // Add virtual documents for any required documents that don't exist in the database yet
         requirements.forEach(req => {
-            const exists = activeRealDocs.find(d => d.type === "CUSTOM" && d.name === req.name)
+            const exists = documents.find(d => d.type === "CUSTOM" && d.name === req.name)
             if (!exists) {
                 mergedDocuments.push({
                     id: `virtual-${req.id}`,
@@ -65,7 +58,8 @@ export async function POST(req: NextRequest) {
                     employeeId: employeeId,
                     createdAt: new Date(),
                     updatedAt: new Date(),
-                    deletedAt: null
+                    deletedAt: null,
+                    isEnabled: true // Defaults to enabled
                 } as any)
             }
         })
