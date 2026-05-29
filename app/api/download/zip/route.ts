@@ -14,25 +14,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "employeeId é obrigatório" }, { status: 400 })
     }
 
-    if (type !== "documents" && type !== "trainings") {
-      return NextResponse.json({ error: "type deve ser 'documents' ou 'trainings'" }, { status: 400 })
+    if (type !== "documents" && type !== "trainings" && type !== "all") {
+      return NextResponse.json({ error: "type deve ser 'documents', 'trainings' ou 'all'" }, { status: 400 })
     }
-
-    const selectQuery = type === "documents"
-      ? {
-        name: true,
-        documents: {
-          select: { id: true, type: true, name: true, fileUrl: true },
-          where: { fileUrl: { not: null } },
-        },
-      }
-      : {
-        name: true,
-        trainings: {
-          select: { id: true, type: true, fileUrl: true },
-          where: { fileUrl: { not: null } },
-        },
-      }
 
     const employeeBase = await db.employee.findUnique({
       where: { id: employeeId },
@@ -46,52 +30,126 @@ export async function POST(req: NextRequest) {
     const hasAccess = await validateCompanyAccess(userId, employeeBase.companyId)
     if (!hasAccess) return forbiddenResponse()
 
+    const selectQuery: any = {}
+    if (type === "documents" || type === "all") {
+      selectQuery.documents = {
+        select: { id: true, type: true, name: true, fileUrl: true },
+        where: { fileUrl: { not: null }, isEnabled: true },
+      }
+    }
+    if (type === "trainings" || type === "all") {
+      selectQuery.trainings = {
+        select: { id: true, type: true, name: true, fileUrl: true },
+        where: { fileUrl: { not: null }, isEnabled: true },
+      }
+    }
+
     const employee = await db.employee.findUnique({
       where: { id: employeeId },
-      select: selectQuery,
+      select: {
+        name: true,
+        ...selectQuery
+      },
     }) as any
 
     const publicDomain = process.env.CLOUDFLARE_PUBLIC_DOMAIN || ""
-
-    const items = type === "documents" ? employee?.documents : employee?.trainings
-    const allFiles: { fileUrl: string; label: string }[] = (items || []).map(
-      (item: { type: string; name?: string | null; fileUrl: string | null }) => ({
-        fileUrl: item.fileUrl!,
-        label: item.name || item.type,
-      })
-    )
-
-    const zipLabel = type === "documents" ? "documentos" : "treinamentos"
-
-    if (!allFiles.length) {
-      return NextResponse.json(
-        { error: `Nenhum arquivo de ${zipLabel} disponível para este funcionário` },
-        { status: 404 }
-      )
-    }
-
     const zip = new JSZip()
     const folder = zip.folder(employeeBase.name) || zip
 
-    await Promise.all(
-      allFiles.map(async ({ fileUrl, label }, index) => {
-        if (!fileUrl.startsWith(publicDomain)) return
+    if (type === "all") {
+      const personalDocs = employee?.documents || []
+      const trainingsDocs = employee?.trainings || []
 
-        try {
-          const res = await fetch(fileUrl)
-          if (!res.ok) return
+      if (!personalDocs.length && !trainingsDocs.length) {
+        return NextResponse.json(
+          { error: "Nenhum arquivo habilitado disponível para este funcionário" },
+          { status: 404 }
+        )
+      }
 
-          const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
-          const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
-          const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
+      if (personalDocs.length) {
+        const subFolder = folder.folder("Documentos Pessoais") || folder
+        await Promise.all(
+          personalDocs.map(async (item: any, index: number) => {
+            const fileUrl = item.fileUrl!
+            if (!fileUrl.startsWith(publicDomain)) return
 
-          const buffer = await res.arrayBuffer()
-          folder.file(filename, buffer)
-        } catch {
-        }
-      })
-    )
+            try {
+              const res = await fetch(fileUrl)
+              if (!res.ok) return
 
+              const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
+              const label = item.name || item.type
+              const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
+              const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
+
+              const buffer = await res.arrayBuffer()
+              subFolder.file(filename, buffer)
+            } catch {}
+          })
+        )
+      }
+
+      if (trainingsDocs.length) {
+        const subFolder = folder.folder("Treinamentos") || folder
+        await Promise.all(
+          trainingsDocs.map(async (item: any, index: number) => {
+            const fileUrl = item.fileUrl!
+            if (!fileUrl.startsWith(publicDomain)) return
+
+            try {
+              const res = await fetch(fileUrl)
+              if (!res.ok) return
+
+              const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
+              const label = item.name || item.type
+              const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
+              const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
+
+              const buffer = await res.arrayBuffer()
+              subFolder.file(filename, buffer)
+            } catch {}
+          })
+        )
+      }
+    } else {
+      const items = type === "documents" ? employee?.documents : employee?.trainings
+      const allFiles: { fileUrl: string; label: string }[] = (items || []).map(
+        (item: { type: string; name?: string | null; fileUrl: string | null }) => ({
+          fileUrl: item.fileUrl!,
+          label: item.name || item.type,
+        })
+      )
+
+      const zipLabel = type === "documents" ? "documentos pessoais" : "treinamentos"
+
+      if (!allFiles.length) {
+        return NextResponse.json(
+          { error: `Nenhum arquivo de ${zipLabel} habilitado disponível para este funcionário` },
+          { status: 404 }
+        )
+      }
+
+      await Promise.all(
+        allFiles.map(async ({ fileUrl, label }, index) => {
+          if (!fileUrl.startsWith(publicDomain)) return
+
+          try {
+            const res = await fetch(fileUrl)
+            if (!res.ok) return
+
+            const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
+            const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
+            const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
+
+            const buffer = await res.arrayBuffer()
+            folder.file(filename, buffer)
+          } catch {}
+        })
+      )
+    }
+
+    const zipLabel = type === "all" ? "documentos_completos" : type === "documents" ? "documentos_pessoais" : "treinamentos"
     const zipArrayBuffer = await zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE" })
     const safeName = employeeBase.name.replace(/\s+/g, "_")
 

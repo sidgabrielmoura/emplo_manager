@@ -997,6 +997,31 @@ export async function downloadEmployeeZip(employeeId: string, employeeName: stri
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ employeeId, type: 'all' }),
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Erro desconhecido' }))
+        throw new Error(err.error || 'Erro ao gerar ZIP')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const safeName = employeeName.replace(/\s+/g, '_')
+    link.href = url
+    link.download = `documentos_completos_${safeName}.zip`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+}
+
+export async function downloadPersonalDocsZip(employeeId: string, employeeName: string) {
+    const response = await fetch(`${base_url}/download/zip`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ employeeId, type: 'documents' }),
     })
 
@@ -1010,13 +1035,12 @@ export async function downloadEmployeeZip(employeeId: string, employeeName: stri
     const link = document.createElement('a')
     const safeName = employeeName.replace(/\s+/g, '_')
     link.href = url
-    link.download = `documentos_${safeName}.zip`
+    link.download = `documentos_pessoais_${safeName}.zip`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
 }
-
 
 export async function downloadTrainingsZip(employeeId: string, employeeName: string) {
     const response = await fetch(`${base_url}/download/zip`, {

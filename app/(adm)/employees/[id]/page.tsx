@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus, downloadPersonalDocsZip } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
@@ -77,6 +77,7 @@ export default function EmployeeProfilePage() {
   const [trainingExpiresAt, setTrainingExpiresAt] = useState('')
   const [trainingExpire, setTrainingExpire] = useState(false)
   const [trainingsZipLoading, setTrainingsZipLoading] = useState(false)
+  const [documentsZipLoading, setDocumentsZipLoading] = useState(false)
   const [newDocName, setNewDocName] = useState('')
   const [isAddingDoc, setIsAddingDoc] = useState(false)
   const [togglingDocId, setTogglingDocId] = useState<string | null>(null)
@@ -422,6 +423,19 @@ export default function EmployeeProfilePage() {
       toast.error(error?.message || "Erro ao baixar treinamentos")
     } finally {
       setTrainingsZipLoading(false)
+    }
+  }
+
+  async function handleDownloadDocumentsZip() {
+    if (!employee) return
+    setDocumentsZipLoading(true)
+    try {
+      await downloadPersonalDocsZip(employee.id, employee.name)
+      toast.success("Download Concluído!")
+    } catch (error: any) {
+      toast.error(error?.message || "Erro ao baixar documentos")
+    } finally {
+      setDocumentsZipLoading(false)
     }
   }
 
@@ -856,9 +870,23 @@ export default function EmployeeProfilePage() {
 
           <TabsContent value="documents" className="mt-6">
             <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white">
-              <CardHeader className="px-6 lg:px-8 py-6 border-b border-slate-50">
-                <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Documentação Obrigatória</CardTitle>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Gestão de arquivos e validades</p>
+              <CardHeader className="px-6 lg:px-8 py-6 border-b border-slate-50 flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Documentação Obrigatória</CardTitle>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Gestão de arquivos e validades</p>
+                </div>
+                {documents && documents.some((d: any) => d.fileUrl && d.isEnabled !== false) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 cursor-pointer"
+                    disabled={documentsZipLoading}
+                    onClick={handleDownloadDocumentsZip}
+                  >
+                    {documentsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    Baixar todos
+                  </Button>
+                )}
               </CardHeader>
 
               <CardContent className="p-0 px-8">
@@ -1259,7 +1287,7 @@ export default function EmployeeProfilePage() {
                   <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Treinamentos e Especializações</CardTitle>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Controle de capacitação técnica</p>
                 </div>
-                {trainings && trainings.some((t: any) => t.fileUrl) && (
+                {trainings && trainings.some((t: any) => t.fileUrl && t.isEnabled !== false) && (
                   <Button
                     variant="outline"
                     size="sm"
