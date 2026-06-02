@@ -6,6 +6,8 @@ export interface CostCenter {
   city: string | null
   state: string | null
   companyId: string
+  isFavorite: boolean
+  favoritedAt: string | null
   createdAt: string
   updatedAt: string
   _count?: {

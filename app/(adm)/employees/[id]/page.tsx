@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin, CheckCircle2 } from "lucide-react"
+import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin, CheckCircle2, Trash2, ArrowUp, ArrowDown, AlertCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus, downloadPersonalDocsZip } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus, downloadPersonalDocsZip, deleteEmployeeDocuments, deleteEmployeeTrainings, swapEmployeeDocuments, swapEmployeeTrainings } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
@@ -84,6 +84,69 @@ export default function EmployeeProfilePage() {
   const [newTrainingName, setNewTrainingName] = useState('')
   const [isAddingTraining, setIsAddingTraining] = useState(false)
   const [togglingTrainingId, setTogglingTrainingId] = useState<string | null>(null)
+
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
+  const [selectedTrainingIds, setSelectedTrainingIds] = useState<string[]>([])
+  const [loadingArrowId, setLoadingArrowId] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "document" | "training"; ids: string[] } | null>(null)
+  const [editingDocName, setEditingDocName] = useState("")
+  const [editingTrainingName, setEditingTrainingName] = useState("")
+
+  const handleMoveDoc = async (index: number, direction: "up" | "down") => {
+    if (!documents || !employee?.id) return
+    const otherIndex = direction === "up" ? index - 1 : index + 1
+    if (otherIndex < 0 || otherIndex >= documents.length) return
+
+    const doc1 = documents[index]
+    const doc2 = documents[otherIndex]
+
+    setLoadingArrowId(doc1.id)
+    try {
+      await swapEmployeeDocuments(employee.id, doc1.id, doc2.id)
+      toast.success("Posição atualizada com sucesso")
+    } catch (error) {
+      toast.error("Erro ao alterar posição")
+    } finally {
+      setLoadingArrowId(null)
+    }
+  }
+
+  const handleMoveTraining = async (index: number, direction: "up" | "down") => {
+    if (!trainings || !employee?.id) return
+    const otherIndex = direction === "up" ? index - 1 : index + 1
+    if (otherIndex < 0 || otherIndex >= trainings.length) return
+
+    const t1 = trainings[index]
+    const t2 = trainings[otherIndex]
+
+    setLoadingArrowId(t1.id)
+    try {
+      await swapEmployeeTrainings(employee.id, t1.id, t2.id)
+      toast.success("Posição atualizada com sucesso")
+    } catch (error) {
+      toast.error("Erro ao alterar posição")
+    } finally {
+      setLoadingArrowId(null)
+    }
+  }
+
+  const handleBulkDeleteDocs = async () => {
+    if (selectedDocIds.length === 0 || !employee?.id) return
+    setDeleteTarget({ type: "document", ids: selectedDocIds })
+  }
+
+  const handleBulkDeleteTrainings = async () => {
+    if (selectedTrainingIds.length === 0 || !employee?.id) return
+    setDeleteTarget({ type: "training", ids: selectedTrainingIds })
+  }
+
+  const handleSingleDeleteDoc = (docId: string) => {
+    setDeleteTarget({ type: "document", ids: [docId] })
+  }
+
+  const handleSingleDeleteTraining = (trainingId: string) => {
+    setDeleteTarget({ type: "training", ids: [trainingId] })
+  }
 
   const handleAddCustomDoc = async () => {
     if (!newDocName.trim() || !employee?.id) return
@@ -309,12 +372,14 @@ export default function EmployeeProfilePage() {
         id,
         issuedAt: docIssuedAt || undefined,
         expiresAt: docExpiresAt || undefined,
+        name: editingDocName || undefined,
       }, employee.id)
 
       if (response) {
         toast.success('Documento atualizado com sucesso')
         setFile(null)
         setPreview(null)
+        setEditingDocName('')
         closeEditDocModal.current?.click()
       }
 
@@ -354,6 +419,7 @@ export default function EmployeeProfilePage() {
         id,
         issuedAt: trainingIssuedAt || undefined,
         expiresAt: trainingExpiresAt || undefined,
+        name: editingTrainingName || undefined,
       }, employee.id)
 
       if (response) {
@@ -363,6 +429,7 @@ export default function EmployeeProfilePage() {
         setTrainingIssuedAt('')
         setTrainingExpiresAt('')
         setTrainingExpire(false)
+        setEditingTrainingName('')
         closeEditDocModal.current?.click()
       }
 
@@ -875,18 +942,30 @@ export default function EmployeeProfilePage() {
                   <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Documentação Obrigatória</CardTitle>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Gestão de arquivos e validades</p>
                 </div>
-                {documents && documents.some((d: any) => d.fileUrl && d.isEnabled !== false) && (
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     className="gap-2 cursor-pointer"
-                    disabled={documentsZipLoading}
-                    onClick={handleDownloadDocumentsZip}
+                    disabled={selectedDocIds.length === 0}
+                    onClick={() => setDeleteTarget({ type: "document", ids: selectedDocIds })}
                   >
-                    {documentsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Baixar todos
+                    <Trash2 className="w-4 h-4" />
+                    Deletar Selecionados ({selectedDocIds.length})
                   </Button>
-                )}
+                  {documents && documents.some((d: any) => d.fileUrl && d.isEnabled !== false) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 cursor-pointer"
+                      disabled={documentsZipLoading}
+                      onClick={handleDownloadDocumentsZip}
+                    >
+                      {documentsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Baixar todos
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="p-0 px-8">
@@ -935,6 +1014,21 @@ export default function EmployeeProfilePage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-12 text-center">
+                            <input
+                              type="checkbox"
+                              checked={documents.length > 0 && selectedDocIds.length === documents.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedDocIds(documents.map(d => d.id))
+                                } else {
+                                  setSelectedDocIds([])
+                                }
+                              }}
+                              className="w-4 h-4 cursor-pointer accent-emerald-600 rounded border-slate-300"
+                            />
+                          </TableHead>
+                          <TableHead className="w-20 text-center">Ordem</TableHead>
                           <TableHead>Documento</TableHead>
                           <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
@@ -946,328 +1040,319 @@ export default function EmployeeProfilePage() {
                       </TableHeader>
 
                       <TableBody>
-                        {documents?.map((doc) => (
-                          <TableRow key={doc.id}>
-                            <TableCell className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-primary" />
-                              {getPTBRDocuments(doc.type, doc.name)}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              <Switch
-                                checked={doc.isEnabled !== false}
-                                disabled={togglingDocId === doc.id}
-                                onCheckedChange={(checked) => handleToggleDocStatus(doc.id, checked)}
-                                className="cursor-pointer mx-auto"
-                              />
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {doc.isEnabled === false ? (
-                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
-                                  Não se aplica
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant={
-                                    doc.status === "APPROVED"
-                                      ? "default"
-                                      : doc.status === "PENDING"
-                                        ? "secondary"
-                                        : "destructive"
-                                  }
-                                >
-                                  {doc.status === "APPROVED"
-                                    ? "Aprovado"
-                                    : doc.status === "PENDING"
-                                      ? "Pendente"
-                                      : "Rejeitado"}
-                                </Badge>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {doc.issuedAt
-                                ? new Date(doc.issuedAt).toLocaleDateString("pt-BR", {
-                                  timeZone: 'UTC',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {doc.expiresAt
-                                ? new Date(doc.expiresAt).toLocaleDateString("pt-BR", {
-                                  timeZone: 'UTC',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {doc.updatedAt
-                                ? new Date(doc.updatedAt).toLocaleDateString("pt-BR", {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              {doc.isEnabled === false ? (
-                                <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
-                              ) : doc.fileUrl ? (
-                                <div className="flex items-center justify-end gap-2">
-                                  <Link href={doc.fileUrl} target="_blank" rel="noreferrer">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="gap-2 cursor-pointer"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                      Ver
-                                    </Button>
-                                  </Link>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 cursor-pointer"
-                                    onClick={() => downloadFile(doc.fileUrl!, `${getPTBRDocuments(doc.type, doc.name)}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
-                                  >
-                                    <Download className="w-4 h-4" />
-                                    Baixar
-                                  </Button>
-                                  <Dialog>
-                                    <DialogTrigger asChild>
+                        {documents?.map((doc, index) => {
+                          const isSelected = selectedDocIds.includes(doc.id)
+                          return (
+                            <TableRow key={doc.id} className={isSelected ? "bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors" : ""}>
+                              <TableCell className="w-12 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedDocIds(prev => [...prev, doc.id])
+                                    } else {
+                                      setSelectedDocIds(prev => prev.filter(id => id !== doc.id))
+                                    }
+                                  }}
+                                  className="w-4 h-4 cursor-pointer accent-emerald-600 rounded border-slate-300"
+                                />
+                              </TableCell>
+                              <TableCell className="w-20 text-center">
+                                <div className="flex items-center gap-1 justify-center">
+                                  {loadingArrowId === doc.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                  ) : (
+                                    <>
                                       <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2 cursor-pointer"
-                                        onClick={() => {
-                                          setDocIssuedAt(doc.issuedAt ? new Date(doc.issuedAt).toISOString().split('T')[0] : '')
-                                          setDocExpiresAt(doc.expiresAt ? new Date(doc.expiresAt).toISOString().split('T')[0] : '')
-                                        }}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                        disabled={index === 0}
+                                        onClick={() => handleMoveDoc(index, "up")}
                                       >
-                                        <Pencil className="w-4 h-4" />
-                                        Editar
+                                        <ArrowUp className="w-4 h-4 text-slate-500" />
                                       </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-2xl! w-full">
-                                      <div className="space-y-5">
-                                        <h3 className="text-lg font-semibold">Atualizar documento</h3>
-
-                                        <input
-                                          ref={inputRef}
-                                          type="file"
-                                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                          hidden
-                                          onChange={(e) => handleSelect(e.target.files)}
-                                        />
-
-                                        <div className="flex flex-col gap-2">
-                                          {doc.fileUrl && !file ? (
-                                            <div className="space-y-3">
-                                              <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
-                                                <CheckCircle2 className="w-5 h-5" />
-                                                <span>Arquivo já se encontra</span>
-                                              </div>
-                                              <Button
-                                                variant="outline"
-                                                className="w-fit cursor-pointer h-9 text-xs"
-                                                onClick={() => inputRef.current?.click()}
-                                              >
-                                                Selecionar outro arquivo
-                                              </Button>
-                                            </div>
-                                          ) : (
-                                            <Button
-                                              variant="outline"
-                                              className="w-fit cursor-pointer"
-                                              onClick={() => inputRef.current?.click()}
-                                            >
-                                              {file ? "Trocar arquivo" : "Selecionar arquivo"}
-                                            </Button>
-                                          )}
-
-                                          <p className="text-xs text-muted-foreground">
-                                            Formatos aceitos: PDF, Word, Excel e PowerPoint
-                                          </p>
-                                        </div>
-
-                                        {preview && file && (
-                                          <div className="flex items-center justify-between gap-3 rounded-md border p-2">
-                                            <span className="text-primary truncate">{file.name}</span>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="cursor-pointer text-destructive"
-                                              onClick={() => {
-                                                setFile(null)
-                                                setPreview(null)
-                                              }}
-                                            >
-                                              Remover
-                                            </Button>
-                                          </div>
-                                        )}
-
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                          <div className="space-y-2">
-                                            <Label>Data de emissão</Label>
-                                            <Input
-                                              type="date"
-                                              value={docIssuedAt}
-                                              onChange={e => setDocIssuedAt(e.target.value)}
-                                            />
-                                          </div>
-                                          <div className="space-y-2">
-                                            <Label>Data de vencimento</Label>
-                                            <Input
-                                              type="date"
-                                              value={docExpiresAt}
-                                              onChange={e => setDocExpiresAt(e.target.value)}
-                                            />
-                                          </div>
-                                        </div>
-
-                                        <div className="flex justify-end gap-2 pt-2">
-                                          <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearDocument(doc.id)}>
-                                            Zerar arquivo
-                                          </Button>
-                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
-                                          <Button
-                                            className="cursor-pointer gap-2"
-                                            disabled={loading}
-                                            onClick={() => handleUploadImage(doc.id, doc.fileUrl)}
-                                          >
-                                            Salvar alterações
-                                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                          </Button>
-                                          <DialogClose ref={closeEditDocModal} />
-                                        </div>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                        disabled={index === documents.length - 1}
+                                        onClick={() => handleMoveDoc(index, "down")}
+                                      >
+                                        <ArrowDown className="w-4 h-4 text-slate-500" />
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
-                              ) : (
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      className="gap-2 cursor-pointer"
-                                      onClick={() => {
-                                        setDocIssuedAt('')
-                                        setDocExpiresAt('')
-                                      }}
-                                    >
-                                      <Upload className="w-4 h-4" />
-                                      Enviar
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-2xl! w-full">
-                                    <div className="space-y-5">
-                                      <h3 className="text-lg font-semibold">Enviar documento</h3>
+                              </TableCell>
+                              <TableCell className="font-semibold text-slate-700 max-w-[200px] truncate">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  {getPTBRDocuments(doc.type, doc.name)}
+                                </div>
+                              </TableCell>
 
-                                      <div className="flex flex-col gap-2">
+                              <TableCell className="text-center">
+                                <Switch
+                                  checked={doc.isEnabled !== false}
+                                  disabled={togglingDocId === doc.id}
+                                  onCheckedChange={(checked) => handleToggleDocStatus(doc.id, checked)}
+                                  className="cursor-pointer mx-auto"
+                                />
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                {doc.isEnabled === false ? (
+                                  <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
+                                    Não se aplica
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant={
+                                      doc.status === "APPROVED"
+                                        ? "default"
+                                        : doc.status === "PENDING"
+                                          ? "secondary"
+                                          : "destructive"
+                                    }
+                                  >
+                                    {doc.status === "APPROVED"
+                                      ? "Aprovado"
+                                      : doc.status === "PENDING"
+                                        ? "Pendente"
+                                        : "Rejeitado"}
+                                  </Badge>
+                                )}
+                              </TableCell>
+
+                              <TableCell className="text-center text-slate-500">
+                                {doc.issuedAt
+                                  ? new Date(doc.issuedAt).toLocaleDateString("pt-BR", {
+                                    timeZone: 'UTC',
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                  : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-center text-slate-500">
+                                {doc.expiresAt
+                                  ? new Date(doc.expiresAt).toLocaleDateString("pt-BR", {
+                                    timeZone: 'UTC',
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                  : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-center text-slate-500">
+                                {doc.updatedAt
+                                  ? new Date(doc.updatedAt).toLocaleDateString("pt-BR", {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                  : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-right">
+                                {doc.isEnabled === false ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
+                                    {!doc.id.startsWith("virtual-") && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                        onClick={() => handleSingleDeleteDoc(doc.id)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2">
+                                    {doc.fileUrl && (
+                                      <>
+                                        <Link href={doc.fileUrl} target="_blank" rel="noreferrer">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2 cursor-pointer"
+                                          >
+                                            <Eye className="w-4 h-4" />
+                                            Ver
+                                          </Button>
+                                        </Link>
                                         <Button
                                           variant="outline"
-                                          className="w-fit cursor-pointer"
-                                          onClick={() => inputRef.current?.click()}
+                                          size="sm"
+                                          className="gap-2 cursor-pointer"
+                                          onClick={() => downloadFile(doc.fileUrl!, `${getPTBRDocuments(doc.type, doc.name)}.${doc.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
                                         >
-                                          Selecionar arquivo
+                                          <Download className="w-4 h-4" />
+                                          Baixar
                                         </Button>
-
-                                        <p className="text-xs text-muted-foreground">
-                                          Formatos aceitos: PDF, Word, Excel e PowerPoint
-                                        </p>
-                                      </div>
-
-                                      <input
-                                        ref={inputRef}
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                        hidden
-                                        onChange={(e) => handleSelect(e.target.files)}
-                                      />
-
-                                      {preview && file && (
-                                        <div className="flex items-center justify-between gap-3 rounded-md border p-2">
-                                          <a
-                                            href={preview}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-primary line-clamp-1 underline underline-offset-4 hover:opacity-80"
+                                      </>
+                                    )}
+                                    <Dialog onOpenChange={(open) => {
+                                      if (open) {
+                                        setDocIssuedAt(doc.issuedAt ? new Date(doc.issuedAt).toISOString().split('T')[0] : '')
+                                        setDocExpiresAt(doc.expiresAt ? new Date(doc.expiresAt).toISOString().split('T')[0] : '')
+                                        setEditingDocName(doc.name)
+                                      }
+                                    }}>
+                                      <DialogTrigger asChild>
+                                        {doc.fileUrl ? (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2 cursor-pointer"
                                           >
-                                            {file.name}
-                                          </a>
-
+                                            <Pencil className="w-4 h-4" />
+                                            Editar
+                                          </Button>
+                                        ) : (
                                           <Button
                                             size="sm"
-                                            variant="ghost"
-                                            className="cursor-pointer text-destructive"
-                                            onClick={() => {
-                                              setFile(null)
-                                              setPreview(null)
-                                            }}
+                                            className="gap-2 cursor-pointer"
                                           >
-                                            Remover
+                                            <Upload className="w-4 h-4" />
+                                            Enviar
                                           </Button>
-                                        </div>
-                                      )}
+                                        )}
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-2xl! w-full rounded-2xl bg-white p-6 shadow-xl border">
+                                        <div className="space-y-5">
+                                          <h3 className="text-lg font-bold text-slate-800">
+                                            {doc.fileUrl ? 'Atualizar' : 'Enviar'} documento: {getPTBRDocuments(doc.type, doc.name)}
+                                          </h3>
 
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                          <Label>Data de emissão</Label>
-                                          <Input
-                                            type="date"
-                                            value={docIssuedAt}
-                                            onChange={e => setDocIssuedAt(e.target.value)}
+                                          {doc.type === "CUSTOM" && (
+                                            <div className="space-y-1.5">
+                                              <Label className="text-sm font-bold text-slate-700">Nome do documento</Label>
+                                              <Input
+                                                value={editingDocName}
+                                                onChange={e => setEditingDocName(e.target.value)}
+                                                className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
+                                              />
+                                            </div>
+                                          )}
+
+                                          <input
+                                            ref={inputRef}
+                                            type="file"
+                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                            hidden
+                                            onChange={(e) => handleSelect(e.target.files)}
                                           />
-                                        </div>
-                                        <div className="space-y-2">
-                                          <Label>Data de vencimento</Label>
-                                          <Input
-                                            type="date"
-                                            value={docExpiresAt}
-                                            onChange={e => setDocExpiresAt(e.target.value)}
-                                          />
-                                        </div>
-                                      </div>
 
-                                      <div className="flex justify-end gap-2 pt-2">
-                                        <Button
-                                          variant="secondary"
-                                          className="cursor-pointer"
-                                          onClick={() => {
-                                            setFile(null)
-                                            setPreview(null)
-                                          }}
-                                        >
-                                          Limpar
-                                        </Button>
+                                          <div className="flex flex-col gap-2">
+                                            {doc.fileUrl && !file ? (
+                                              <div className="space-y-3">
+                                                <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
+                                                  <CheckCircle2 className="w-5 h-5" />
+                                                  <span>Arquivo já se encontra</span>
+                                                </div>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-fit cursor-pointer h-9 text-xs"
+                                                  onClick={() => inputRef.current?.click()}
+                                                >
+                                                  Selecionar outro arquivo
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <Button
+                                                variant="outline"
+                                                className="w-fit cursor-pointer"
+                                                onClick={() => inputRef.current?.click()}
+                                              >
+                                                {file ? "Trocar arquivo" : "Selecionar arquivo"}
+                                              </Button>
+                                            )}
 
-                                        <Button
-                                          className="cursor-pointer gap-2"
-                                          disabled={!file || loading}
-                                          onClick={() => handleUploadImage(doc.id)}
-                                        >
-                                          Enviar documento
-                                          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                        </Button>
-                                        <DialogClose ref={closeEditDocModal} />
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                            <p className="text-xs text-muted-foreground">
+                                              Formatos aceitos: PDF, Word, Excel e PowerPoint
+                                            </p>
+                                          </div>
+
+                                          {preview && file && (
+                                            <div className="flex items-center justify-between gap-3 rounded-md border p-2">
+                                              <span className="text-primary truncate">{file.name}</span>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="cursor-pointer text-destructive"
+                                                onClick={() => {
+                                                  setFile(null)
+                                                  setPreview(null)
+                                                }}
+                                              >
+                                                Remover
+                                              </Button>
+                                            </div>
+                                          )}
+
+                                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                              <Label>Data de emissão</Label>
+                                              <Input
+                                                type="date"
+                                                value={docIssuedAt}
+                                                onChange={e => setDocIssuedAt(e.target.value)}
+                                              />
+                                            </div>
+                                            <div className="space-y-2">
+                                              <Label>Data de vencimento</Label>
+                                              <Input
+                                                type="date"
+                                                value={docExpiresAt}
+                                                onChange={e => setDocExpiresAt(e.target.value)}
+                                              />
+                                            </div>
+                                          </div>
+
+                                          <div className="flex justify-end gap-2 pt-2">
+                                            {doc.fileUrl && (
+                                              <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearDocument(doc.id)}>
+                                                Zerar arquivo
+                                              </Button>
+                                            )}
+                                            <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
+                                            <Button
+                                              className="cursor-pointer gap-2"
+                                              disabled={loading || (!file && doc.type === 'CUSTOM' && editingDocName === doc.name && !doc.fileUrl)}
+                                              onClick={() => handleUploadImage(doc.id, doc.fileUrl)}
+                                            >
+                                              {doc.fileUrl ? 'Salvar alterações' : 'Enviar documento'}
+                                              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                            </Button>
+                                            <DialogClose ref={closeEditDocModal} />
+                                          </div>
+                                        </div>
+                                      </DialogContent>
+                                    </Dialog>
+
+                                    {!doc.id.startsWith("virtual-") && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                        onClick={() => handleSingleDeleteDoc(doc.id)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -1287,18 +1372,30 @@ export default function EmployeeProfilePage() {
                   <CardTitle className="text-lg lg:text-xl font-bold text-slate-900">Treinamentos e Especializações</CardTitle>
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Controle de capacitação técnica</p>
                 </div>
-                {trainings && trainings.some((t: any) => t.fileUrl && t.isEnabled !== false) && (
+                <div className="flex items-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="destructive"
                     size="sm"
                     className="gap-2 cursor-pointer"
-                    disabled={trainingsZipLoading}
-                    onClick={handleDownloadTrainingsZip}
+                    disabled={selectedTrainingIds.length === 0}
+                    onClick={() => setDeleteTarget({ type: "training", ids: selectedTrainingIds })}
                   >
-                    {trainingsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    Baixar todos
+                    <Trash2 className="w-4 h-4" />
+                    Deletar Selecionados ({selectedTrainingIds.length})
                   </Button>
-                )}
+                  {trainings && trainings.some((t: any) => t.fileUrl && t.isEnabled !== false) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 cursor-pointer"
+                      disabled={trainingsZipLoading}
+                      onClick={handleDownloadTrainingsZip}
+                    >
+                      {trainingsZipLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                      Baixar todos
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
 
               <CardContent className="p-0 px-8">
@@ -1347,6 +1444,21 @@ export default function EmployeeProfilePage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
+                          <TableHead className="w-12 text-center">
+                            <input
+                              type="checkbox"
+                              checked={trainings.length > 0 && selectedTrainingIds.length === trainings.length}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setSelectedTrainingIds(trainings.map(t => t.id))
+                                } else {
+                                  setSelectedTrainingIds([])
+                                }
+                              }}
+                              className="w-4 h-4 cursor-pointer accent-emerald-600 rounded border-slate-300"
+                            />
+                          </TableHead>
+                          <TableHead className="w-20 text-center">Ordem</TableHead>
                           <TableHead>Treinamento</TableHead>
                           <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
@@ -1358,336 +1470,324 @@ export default function EmployeeProfilePage() {
                       </TableHeader>
 
                       <TableBody>
-                        {trainings.map((training) => (
-                          <TableRow key={training.id}>
-                            <TableCell className="flex items-center gap-2">
-                              <FileText className="w-4 h-4 text-primary" />
-                              {getPTBRDocuments(training.type, training.name ?? undefined)}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              <Switch
-                                checked={training.isEnabled !== false}
-                                disabled={togglingTrainingId === training.id}
-                                onCheckedChange={(checked) => handleToggleTrainingStatus(training.id, checked)}
-                                className="cursor-pointer mx-auto"
-                              />
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {training.isEnabled === false ? (
-                                <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
-                                  Não se aplica
-                                </Badge>
-                              ) : (
-                                <Badge
-                                  variant={
-                                    training.status === "APPROVED"
-                                      ? "default"
-                                      : training.status === "PENDING"
-                                        ? "secondary"
-                                        : "destructive"
-                                  }
-                                >
-                                  {training.status === "APPROVED"
-                                    ? "Aprovado"
-                                    : training.status === "PENDING"
-                                      ? "Pendente"
-                                      : "Rejeitado"}
-                                </Badge>
-                              )}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {training.isEnabled === false ? "—" : training.issuedAt
-                                ? new Date(training.issuedAt).toLocaleDateString("pt-BR", {
-                                  timeZone: 'UTC',
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {training.isEnabled === false ? "—" : training.expiresAt ? getDaysRemaining(training.expiresAt) : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-center">
-                              {training.updatedAt
-                                ? new Date(training.updatedAt).toLocaleDateString("pt-BR", {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                  year: 'numeric'
-                                })
-                                : "—"}
-                            </TableCell>
-
-                            <TableCell className="text-right">
-                              {training.isEnabled === false ? (
-                                <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
-                              ) : training.fileUrl ? (
-                                <div className="flex justify-end gap-2">
-                                  <Link href={training.fileUrl} target="_blank" rel="noreferrer">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="gap-2 cursor-pointer"
-                                    >
-                                      <Eye className="w-4 h-4" />
-                                      Ver
-                                    </Button>
-                                  </Link>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 cursor-pointer"
-                                    onClick={() => downloadFile(training.fileUrl!, `${getPTBRDocuments(training.type, training.name ?? undefined)}.${training.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
-                                  >
-                                    <Download className="w-4 h-4" />
-                                    Baixar
-                                  </Button>
-                                  <Dialog>
-                                    <DialogTrigger asChild>
+                        {trainings.map((training, index) => {
+                          const isSelected = selectedTrainingIds.includes(training.id)
+                          return (
+                            <TableRow key={training.id} className={isSelected ? "bg-emerald-50/40 hover:bg-emerald-50/60 transition-colors" : ""}>
+                              <TableCell className="w-12 text-center">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedTrainingIds(prev => [...prev, training.id])
+                                    } else {
+                                      setSelectedTrainingIds(prev => prev.filter(id => id !== training.id))
+                                    }
+                                  }}
+                                  className="w-4 h-4 cursor-pointer accent-emerald-600 rounded border-slate-300"
+                                />
+                              </TableCell>
+                              <TableCell className="w-20 text-center">
+                                <div className="flex items-center gap-1 justify-center">
+                                  {loadingArrowId === training.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                  ) : (
+                                    <>
                                       <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="gap-2 cursor-pointer"
-                                        onClick={() => {
-                                          setTrainingIssuedAt(training.issuedAt ? new Date(training.issuedAt).toISOString().split('T')[0] : '')
-                                          setTrainingExpiresAt(training.expiresAt ? new Date(training.expiresAt).toISOString().split('T')[0] : '')
-                                          setTrainingExpire(!!training.expiresAt)
-                                        }}
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                        disabled={index === 0}
+                                        onClick={() => handleMoveTraining(index, "up")}
                                       >
-                                        <Pencil className="w-4 h-4" />
-                                        Editar
+                                        <ArrowUp className="w-4 h-4 text-slate-500" />
                                       </Button>
-                                    </DialogTrigger>
-                                    <DialogContent className="max-w-2xl! w-full">
-                                      <div className="space-y-5">
-                                        <h3 className="text-lg font-semibold">Atualizar treinamento</h3>
-
-                                        <input
-                                          ref={inputRef}
-                                          type="file"
-                                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                          hidden
-                                          onChange={(e) => handleSelect(e.target.files)}
-                                        />
-
-                                        <div className="flex flex-col gap-2">
-                                          {training.fileUrl && !file ? (
-                                            <div className="space-y-3">
-                                              <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
-                                                <CheckCircle2 className="w-5 h-5" />
-                                                <span>Arquivo já se encontra</span>
-                                              </div>
-                                              <Button
-                                                variant="outline"
-                                                className="w-fit cursor-pointer h-9 text-xs"
-                                                onClick={() => inputRef.current?.click()}
-                                              >
-                                                Selecionar outro arquivo
-                                              </Button>
-                                            </div>
-                                          ) : (
-                                            <Button
-                                              variant="outline"
-                                              className="w-fit cursor-pointer"
-                                              onClick={() => inputRef.current?.click()}
-                                            >
-                                              {file ? "Trocar arquivo" : "Selecionar arquivo"}
-                                            </Button>
-                                          )}
-                                          <p className="text-xs text-muted-foreground">
-                                            Formatos aceitos: PDF, Word, Excel e PowerPoint
-                                          </p>
-                                        </div>
-
-                                        {preview && file && (
-                                          <div className="flex items-center justify-between gap-3 rounded-md border p-2">
-                                            <span className="text-primary truncate">{file.name}</span>
-                                            <Button
-                                              size="sm"
-                                              variant="ghost"
-                                              className="cursor-pointer text-destructive"
-                                              onClick={() => {
-                                                setFile(null)
-                                                setPreview(null)
-                                              }}
-                                            >
-                                              Remover
-                                            </Button>
-                                          </div>
-                                        )}
-
-                                        <section>
-                                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                              <label className="text-sm font-medium">Data de emissão</label>
-                                              <Input
-                                                type="date"
-                                                value={trainingIssuedAt}
-                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                                onChange={(e) => setTrainingIssuedAt(e.target.value)}
-                                              />
-                                            </div>
-
-                                            <div className="space-y-1">
-                                              <label className="text-sm font-medium">Data de vencimento</label>
-                                              <Input
-                                                disabled={!trainingExpire}
-                                                type="date"
-                                                value={trainingExpiresAt}
-                                                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                                onChange={(e) => setTrainingExpiresAt(e.target.value)}
-                                              />
-                                            </div>
-                                          </div>
-
-                                          <div className="flex items-center gap-3 mt-5 justify-end">
-                                            <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
-                                            <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
-                                          </div>
-                                        </section>
-
-                                        <div className="flex justify-end gap-2 pt-2">
-                                          <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearTraining(training.id)}>
-                                            Zerar arquivo
-                                          </Button>
-                                          <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
-                                          <Button
-                                            className="cursor-pointer gap-2"
-                                            disabled={loading}
-                                            onClick={() => handleUploadTraining(training.id, training.fileUrl)}
-                                          >
-                                            Salvar alterações
-                                            {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                          </Button>
-                                          <DialogClose ref={closeEditDocModal} />
-                                        </div>
-                                      </div>
-                                    </DialogContent>
-                                  </Dialog>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                        disabled={index === trainings.length - 1}
+                                        onClick={() => handleMoveTraining(index, "down")}
+                                      >
+                                        <ArrowDown className="w-4 h-4 text-slate-500" />
+                                      </Button>
+                                    </>
+                                  )}
                                 </div>
-                              ) : (
-                                <Dialog>
-                                  <DialogTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      className="gap-2 cursor-pointer"
-                                      onClick={() => {
-                                        setTrainingIssuedAt('')
-                                        setTrainingExpiresAt('')
-                                        setTrainingExpire(false)
-                                      }}
-                                    >
-                                      <Upload className="w-4 h-4" />
-                                      Enviar
-                                    </Button>
-                                  </DialogTrigger>
-                                  <DialogContent className="max-w-2xl! w-full">
-                                    <div className="space-y-5">
-                                      <h3 className="text-lg font-semibold">Enviar comprovante de treinamento</h3>
+                              </TableCell>
+                              <TableCell className="font-semibold text-slate-700 max-w-[200px] truncate">
+                                <div className="flex items-center gap-2">
+                                  <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  {getPTBRDocuments(training.type, training.name ?? undefined)}
+                                </div>
+                              </TableCell>
 
-                                      <input
-                                        ref={inputRef}
-                                        type="file"
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                                        hidden
-                                        onChange={(e) => handleSelect(e.target.files)}
-                                      />
+                              <TableCell className="text-center">
+                                <Switch
+                                  checked={training.isEnabled !== false}
+                                  disabled={togglingTrainingId === training.id}
+                                  onCheckedChange={(checked) => handleToggleTrainingStatus(training.id, checked)}
+                                  className="cursor-pointer mx-auto"
+                                />
+                              </TableCell>
 
-                                      <div className="flex flex-col gap-2">
+                              <TableCell className="text-center">
+                                {training.isEnabled === false ? (
+                                  <Badge variant="outline" className="bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-50">
+                                    Não se aplica
+                                  </Badge>
+                                ) : (
+                                  <Badge
+                                    variant={
+                                      training.status === "APPROVED"
+                                        ? "default"
+                                        : training.status === "PENDING"
+                                          ? "secondary"
+                                          : "destructive"
+                                    }
+                                  >
+                                    {training.status === "APPROVED"
+                                      ? "Aprovado"
+                                      : training.status === "PENDING"
+                                        ? "Pendente"
+                                        : "Rejeitado"}
+                                  </Badge>
+                                )}
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                {training.isEnabled === false ? "—" : training.issuedAt
+                                  ? new Date(training.issuedAt).toLocaleDateString("pt-BR", {
+                                    timeZone: 'UTC',
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                  : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                {training.isEnabled === false ? "—" : training.expiresAt ? getDaysRemaining(training.expiresAt) : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-center">
+                                {training.updatedAt
+                                  ? new Date(training.updatedAt).toLocaleDateString("pt-BR", {
+                                    day: '2-digit',
+                                    month: '2-digit',
+                                    year: 'numeric'
+                                  })
+                                  : "—"}
+                              </TableCell>
+
+                              <TableCell className="text-right">
+                                {training.isEnabled === false ? (
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
+                                    {!training.id.startsWith("virtual-") && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                        onClick={() => handleSingleDeleteTraining(training.id)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-end gap-2">
+                                    {training.fileUrl && (
+                                      <>
+                                        <Link href={training.fileUrl} target="_blank" rel="noreferrer">
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2 cursor-pointer"
+                                          >
+                                            <Eye className="w-4 h-4" />
+                                            Ver
+                                          </Button>
+                                        </Link>
                                         <Button
                                           variant="outline"
-                                          className="w-fit cursor-pointer"
-                                          onClick={() => inputRef.current?.click()}
+                                          size="sm"
+                                          className="gap-2 cursor-pointer"
+                                          onClick={() => downloadFile(training.fileUrl!, `${getPTBRDocuments(training.type, training.name ?? undefined)}.${training.fileUrl!.split('.').pop()?.split('?')[0] || 'pdf'}`)}
                                         >
-                                          Selecionar arquivo
+                                          <Download className="w-4 h-4" />
+                                          Baixar
                                         </Button>
-
-                                        <p className="text-xs text-muted-foreground">
-                                          Formatos aceitos: PDF, Word, Excel e PowerPoint
-                                        </p>
-                                      </div>
-
-                                      {preview && file && (
-                                        <div className="flex items-center justify-between gap-3 rounded-md border p-2">
-                                          <span className="text-primary line-clamp-1">{file.name}</span>
+                                      </>
+                                    )}
+                                    <Dialog onOpenChange={(open) => {
+                                      if (open) {
+                                        setTrainingIssuedAt(training.issuedAt ? new Date(training.issuedAt).toISOString().split('T')[0] : '')
+                                        setTrainingExpiresAt(training.expiresAt ? new Date(training.expiresAt).toISOString().split('T')[0] : '')
+                                        setTrainingExpire(!!training.expiresAt)
+                                        setEditingTrainingName(training.name || '')
+                                      }
+                                    }}>
+                                      <DialogTrigger asChild>
+                                        {training.fileUrl ? (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="gap-2 cursor-pointer"
+                                          >
+                                            <Pencil className="w-4 h-4" />
+                                            Editar
+                                          </Button>
+                                        ) : (
                                           <Button
                                             size="sm"
-                                            variant="ghost"
-                                            className="cursor-pointer text-destructive"
-                                            onClick={() => {
-                                              setFile(null)
-                                              setPreview(null)
-                                            }}
+                                            className="gap-2 cursor-pointer"
                                           >
-                                            Remover
+                                            <Upload className="w-4 h-4" />
+                                            Enviar
                                           </Button>
-                                        </div>
-                                      )}
+                                        )}
+                                      </DialogTrigger>
+                                      <DialogContent className="max-w-2xl! w-full rounded-2xl bg-white p-6 shadow-xl border">
+                                        <div className="space-y-5">
+                                          <h3 className="text-lg font-bold text-slate-800">
+                                            {training.fileUrl ? 'Atualizar' : 'Enviar'} treinamento: {getPTBRDocuments(training.type, training.name ?? undefined)}
+                                          </h3>
 
-                                      <section>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de emissão</label>
-                                            <Input
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setTrainingIssuedAt(e.target.value)}
-                                            />
+                                          {training.type === "CUSTOM" && (
+                                            <div className="space-y-1.5">
+                                              <Label className="text-sm font-bold text-slate-700">Nome do treinamento</Label>
+                                              <Input
+                                                value={editingTrainingName}
+                                                onChange={e => setEditingTrainingName(e.target.value)}
+                                                className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
+                                              />
+                                            </div>
+                                          )}
+
+                                          <input
+                                            ref={inputRef}
+                                            type="file"
+                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                                            hidden
+                                            onChange={(e) => handleSelect(e.target.files)}
+                                          />
+
+                                          <div className="flex flex-col gap-2">
+                                            {training.fileUrl && !file ? (
+                                              <div className="space-y-3">
+                                                <div className="flex items-center gap-2 text-emerald-600 font-bold bg-emerald-50 w-fit px-3 py-1.5 rounded-lg border border-emerald-100">
+                                                  <CheckCircle2 className="w-5 h-5" />
+                                                  <span>Arquivo já se encontra</span>
+                                                </div>
+                                                <Button
+                                                  variant="outline"
+                                                  className="w-fit cursor-pointer h-9 text-xs"
+                                                  onClick={() => inputRef.current?.click()}
+                                                >
+                                                  Selecionar outro arquivo
+                                                </Button>
+                                              </div>
+                                            ) : (
+                                              <Button
+                                                variant="outline"
+                                                className="w-fit cursor-pointer"
+                                                onClick={() => inputRef.current?.click()}
+                                              >
+                                                {file ? "Trocar arquivo" : "Selecionar arquivo"}
+                                              </Button>
+                                            )}
+
+                                            <p className="text-xs text-muted-foreground">
+                                              Formatos aceitos: PDF, Word, Excel e PowerPoint
+                                            </p>
                                           </div>
 
-                                          <div className="space-y-1">
-                                            <label className="text-sm font-medium">Data de vencimento</label>
-                                            <Input
-                                              disabled={!trainingExpire}
-                                              type="date"
-                                              className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                                              onChange={(e) => setTrainingExpiresAt(e.target.value)}
-                                            />
+                                          {preview && file && (
+                                            <div className="flex items-center justify-between gap-3 rounded-md border p-2">
+                                              <span className="text-primary truncate">{file.name}</span>
+                                              <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                className="cursor-pointer text-destructive"
+                                                onClick={() => {
+                                                  setFile(null)
+                                                  setPreview(null)
+                                                }}
+                                              >
+                                                Remover
+                                              </Button>
+                                            </div>
+                                          )}
+
+                                          <section>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                              <div className="space-y-1">
+                                                <label className="text-sm font-medium">Data de emissão</label>
+                                                <Input
+                                                  type="date"
+                                                  value={trainingIssuedAt}
+                                                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                  onChange={(e) => setTrainingIssuedAt(e.target.value)}
+                                                />
+                                              </div>
+
+                                              <div className="space-y-1">
+                                                <label className="text-sm font-medium">Data de vencimento</label>
+                                                <Input
+                                                  disabled={!trainingExpire}
+                                                  type="date"
+                                                  value={trainingExpiresAt}
+                                                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                                                  onChange={(e) => setTrainingExpiresAt(e.target.value)}
+                                                />
+                                              </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-3 mt-5 justify-end">
+                                              <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
+                                              <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
+                                            </div>
+                                          </section>
+
+                                          <div className="flex justify-end gap-2 pt-2">
+                                            {training.fileUrl && (
+                                              <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearTraining(training.id)}>
+                                                Zerar arquivo
+                                              </Button>
+                                            )}
+                                            <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
+                                            <Button
+                                              className="cursor-pointer gap-2"
+                                              disabled={loading}
+                                              onClick={() => handleUploadTraining(training.id, training.fileUrl)}
+                                            >
+                                              Salvar alterações
+                                              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                            </Button>
+                                            <DialogClose ref={closeEditDocModal} />
                                           </div>
                                         </div>
+                                      </DialogContent>
+                                    </Dialog>
 
-                                        <div className="flex items-center gap-3 mt-5 justify-end">
-                                          <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
-                                          <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
-                                        </div>
-                                      </section>
-
-                                      <div className="flex justify-end gap-2 pt-2">
-                                        <Button
-                                          variant="secondary"
-                                          className="cursor-pointer"
-                                          onClick={() => {
-                                            setFile(null)
-                                            setPreview(null)
-                                            setTrainingIssuedAt('')
-                                            setTrainingExpiresAt('')
-                                          }}
-                                        >
-                                          Limpar
-                                        </Button>
-
-                                        <Button
-                                          className="cursor-pointer gap-2"
-                                          disabled={!file || loading}
-                                          onClick={() => handleUploadTraining(training.id)}
-                                        >
-                                          Enviar treinamento
-                                          {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                        </Button>
-                                        <DialogClose ref={closeEditDocModal} />
-                                      </div>
-                                    </div>
-                                  </DialogContent>
-                                </Dialog>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
+                                    {!training.id.startsWith("virtual-") && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
+                                        onClick={() => handleSingleDeleteTraining(training.id)}
+                                      >
+                                        <Trash2 className="size-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                       </TableBody>
                     </Table>
                   </div>
@@ -1702,6 +1802,60 @@ export default function EmployeeProfilePage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-white p-6 shadow-xl border">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="p-3 bg-red-50 text-red-600 rounded-full">
+              <AlertCircle className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-slate-900">Confirmar Exclusão</h3>
+              <p className="text-sm text-slate-500 mt-2">
+                Tem certeza de que deseja excluir permanentemente {deleteTarget?.ids.length === 1 ? "este item" : `${deleteTarget?.ids.length} itens selecionados`}? Esta ação não poderá ser desfeita.
+              </p>
+            </div>
+            <div className="flex gap-3 w-full pt-2">
+              <Button
+                variant="outline"
+                className="w-full rounded-xl cursor-pointer flex-1"
+                disabled={loading}
+                onClick={() => setDeleteTarget(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="w-full rounded-xl cursor-pointer flex-1 flex items-center justify-center gap-2"
+                disabled={loading}
+                onClick={async () => {
+                  if (!deleteTarget || !employee?.id) return
+                  setLoading(true)
+                  try {
+                    if (deleteTarget.type === "document") {
+                      await deleteEmployeeDocuments(employee.id, deleteTarget.ids)
+                      setSelectedDocIds(prev => prev.filter(id => !deleteTarget.ids.includes(id)))
+                      toast.success("Documento(s) excluído(s) com sucesso")
+                    } else {
+                      await deleteEmployeeTrainings(employee.id, deleteTarget.ids)
+                      setSelectedTrainingIds(prev => prev.filter(id => !deleteTarget.ids.includes(id)))
+                      toast.success("Treinamento(s) excluído(s) com sucesso")
+                    }
+                    setDeleteTarget(null)
+                  } catch (error) {
+                    toast.error("Erro ao excluir item(ns)")
+                  } finally {
+                    setLoading(false)
+                  }
+                }}
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                Excluir
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   )
 }

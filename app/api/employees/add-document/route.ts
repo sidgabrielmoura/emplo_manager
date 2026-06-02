@@ -41,13 +41,21 @@ export async function POST(req: NextRequest) {
 
         if (existingDoc) {
             if (existingDoc.deletedAt !== null) {
+                const maxDoc = await db.document.findFirst({
+                    where: { employeeId, deletedAt: null },
+                    orderBy: { position: "desc" },
+                    select: { position: true }
+                })
+                const nextPosition = maxDoc ? maxDoc.position + 1 : 1
+
                 // Restore deleted document
                 const restoredDoc = await db.document.update({
                     where: { id: existingDoc.id },
                     data: {
                         deletedAt: null,
                         isEnabled: true,
-                        status: "PENDING"
+                        status: "PENDING",
+                        position: nextPosition
                     }
                 })
                 return NextResponse.json(restoredDoc)
@@ -56,13 +64,21 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Este documento já está adicionado para este funcionário" }, { status: 400 })
         }
 
+        const maxDoc = await db.document.findFirst({
+            where: { employeeId, deletedAt: null },
+            orderBy: { position: "desc" },
+            select: { position: true }
+        })
+        const nextPosition = maxDoc ? maxDoc.position + 1 : 1
+
         const newDoc = await db.document.create({
             data: {
                 employeeId,
                 type: "CUSTOM",
                 name: docName,
                 status: "PENDING",
-                isEnabled: true
+                isEnabled: true,
+                position: nextPosition
             }
         })
 

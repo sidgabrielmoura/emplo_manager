@@ -18,8 +18,44 @@ export async function GET(req: NextRequest) {
 
         const docs = await db.companyRequiredDocument.findMany({
             where: { companyId },
-            orderBy: { createdAt: "desc" }
+            orderBy: [
+                { position: "asc" },
+                { createdAt: "asc" }
+            ]
         })
+
+        const targets = Array.from(new Set(docs.map(d => d.target)))
+        let needsUpdate = false
+        const updatePromises: any[] = []
+
+        for (const target of targets) {
+            const targetDocs = docs.filter(d => d.target === target)
+            const positions = targetDocs.map(d => d.position)
+            const hasZeroOrDuplicates = positions.some(p => p === 0) || new Set(positions).size !== positions.length
+            if (hasZeroOrDuplicates && targetDocs.length > 0) {
+                needsUpdate = true
+                targetDocs.forEach((doc, idx) => {
+                    updatePromises.push(
+                        db.companyRequiredDocument.update({
+                            where: { id: doc.id },
+                            data: { position: idx + 1 }
+                        })
+                    )
+                })
+            }
+        }
+
+        if (needsUpdate) {
+            await db.$transaction(updatePromises)
+            const updatedDocs = await db.companyRequiredDocument.findMany({
+                where: { companyId },
+                orderBy: [
+                    { position: "asc" },
+                    { createdAt: "asc" }
+                ]
+            })
+            return NextResponse.json(updatedDocs)
+        }
 
         return NextResponse.json(docs)
     } catch (error) {
@@ -60,13 +96,21 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Este documento já está registrado" }, { status: 400 })
         }
 
+        const maxReq = await db.companyRequiredDocument.findFirst({
+            where: { companyId, target: target || "EMPLOYEE_DOC" },
+            orderBy: { position: "desc" },
+            select: { position: true }
+        })
+        const nextPosition = maxReq ? maxReq.position + 1 : 1
+
         const newReq = await db.companyRequiredDocument.create({
             data: {
                 companyId,
                 name: docName,
                 target: target || "EMPLOYEE_DOC",
                 validityDays: validityDays ? parseInt(validityDays) : null,
-                isEnabled: isEnabled !== undefined ? isEnabled : true
+                isEnabled: isEnabled !== undefined ? isEnabled : true,
+                position: nextPosition
             }
         })
 

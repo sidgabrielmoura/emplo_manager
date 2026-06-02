@@ -41,13 +41,21 @@ export async function POST(req: NextRequest) {
 
         if (existingTraining) {
             if (existingTraining.deletedAt !== null) {
+                const maxTraining = await db.training.findFirst({
+                    where: { employeeId, deletedAt: null },
+                    orderBy: { position: "desc" },
+                    select: { position: true }
+                })
+                const nextPosition = maxTraining ? maxTraining.position + 1 : 1
+
                 // Restore deleted training
                 const restoredTraining = await db.training.update({
                     where: { id: existingTraining.id },
                     data: {
                         deletedAt: null,
                         isEnabled: true,
-                        status: "PENDING"
+                        status: "PENDING",
+                        position: nextPosition
                     }
                 })
                 return NextResponse.json(restoredTraining)
@@ -56,13 +64,21 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Este treinamento já está adicionado para este funcionário" }, { status: 400 })
         }
 
+        const maxTraining = await db.training.findFirst({
+            where: { employeeId, deletedAt: null },
+            orderBy: { position: "desc" },
+            select: { position: true }
+        })
+        const nextPosition = maxTraining ? maxTraining.position + 1 : 1
+
         const newTraining = await db.training.create({
             data: {
                 employeeId,
                 type: "CUSTOM",
                 name: trainingName,
                 status: "PENDING",
-                isEnabled: true
+                isEnabled: true,
+                position: nextPosition
             }
         })
 

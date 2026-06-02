@@ -95,7 +95,8 @@ export async function POST(req: NextRequest) {
                     employeeId: employee.id,
                     type: "CUSTOM",
                     name: req.name,
-                    isEnabled: true
+                    isEnabled: true,
+                    position: req.position
                 })),
                 skipDuplicates: true
             })
@@ -115,7 +116,8 @@ export async function POST(req: NextRequest) {
                     employeeId: employee.id,
                     type: "CUSTOM",
                     name: req.name,
-                    isEnabled: true
+                    isEnabled: true,
+                    position: req.position
                 })),
                 skipDuplicates: true
             })

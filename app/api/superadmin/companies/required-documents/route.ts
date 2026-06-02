@@ -39,12 +39,20 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Dados obrigatórios ausentes" }, { status: 400 })
         }
 
+        const maxReq = await db.companyRequiredDocument.findFirst({
+            where: { companyId, target },
+            orderBy: { position: "desc" },
+            select: { position: true }
+        })
+        const nextPosition = maxReq ? maxReq.position + 1 : 1
+
         const requirement = await db.companyRequiredDocument.create({
             data: {
                 companyId,
                 name,
                 target,
-                validityDays: validityDays ? parseInt(validityDays) : null
+                validityDays: validityDays ? parseInt(validityDays) : null,
+                position: nextPosition
             }
         })
 

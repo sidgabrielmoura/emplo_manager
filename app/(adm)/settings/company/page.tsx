@@ -11,9 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanyStore } from "@/stores/company"
 import { useSnapshot } from "valtio"
 import { useEffect, useState } from "react"
-import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download, Pencil, Trash2 } from "lucide-react"
+import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile, getCompanyRequiredDocumentsAdmin, addCompanyRequiredDocumentAdmin, updateCompanyRequiredDocumentAdmin, deleteCompanyRequiredDocumentAdmin } from "@/actions/requests"
+import { updateCompany, uploadImage, getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile, getCompanyRequiredDocumentsAdmin, addCompanyRequiredDocumentAdmin, updateCompanyRequiredDocumentAdmin, deleteCompanyRequiredDocumentAdmin, swapRequiredDocuments } from "@/actions/requests"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogTrigger, DialogClose } from "@/components/ui/dialog"
@@ -85,11 +85,13 @@ export default function CompanySettingsPage() {
     const [editingChecklist, setEditingChecklist] = useState<any | null>(null)
     const [checklistForm, setChecklistForm] = useState({
         name: '',
-        target: 'EMPLOYEE_DOC' as 'EMPLOYEE_DOC' | 'COMPANY_DOC' | 'COMPANY_LABOR',
+        target: 'EMPLOYEE_DOC' as 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR',
         validityDays: '' as string | number,
         isEnabled: true
     })
     const [checklistLoading, setChecklistLoading] = useState(false)
+    const [loadingArrowId, setLoadingArrowId] = useState<string | null>(null)
+    const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
     const handleSaveChecklist = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -121,10 +123,10 @@ export default function CompanySettingsPage() {
                 })
                 toast.success("Documento padrão criado com sucesso!")
             }
-            
+
             const data = await getCompanyRequiredDocumentsAdmin(companyId)
             setRequiredDocs(data || [])
-            
+
             setIsChecklistDialogOpen(false)
             setEditingChecklist(null)
             setChecklistForm({ name: '', target: 'EMPLOYEE_DOC', validityDays: '', isEnabled: true })
@@ -135,20 +137,33 @@ export default function CompanySettingsPage() {
         }
     }
 
-    const handleDeleteChecklist = async (id: string) => {
-        if (!confirm("Tem certeza que deseja excluir este documento padrão? Isso removerá o controle dele para todos os funcionários e empresa.")) return
+    const handleDeleteChecklist = (id: string) => {
+        setDeleteTarget(id)
+    }
+
+    const handleMoveRequiredDoc = async (items: any[], index: number, direction: "up" | "down") => {
+        const otherIndex = direction === "up" ? index - 1 : index + 1
+        if (otherIndex < 0 || otherIndex >= items.length) return
+
+        const item1 = items[index]
+        const item2 = items[otherIndex]
         const companyId = company_selected?.id || localStorage.getItem('company_id')
         if (!companyId) return
 
+        setLoadingArrowId(item1.id)
         try {
-            await deleteCompanyRequiredDocumentAdmin(id)
-            toast.success("Documento padrão excluído com sucesso!")
+            await swapRequiredDocuments(item1.id, item2.id)
             const data = await getCompanyRequiredDocumentsAdmin(companyId)
             setRequiredDocs(data || [])
-        } catch (error: any) {
-            toast.error(error?.response?.data?.error || "Erro ao excluir documento padrão")
+            toast.success("Posição atualizada com sucesso")
+        } catch (error) {
+            toast.error("Erro ao alterar posição")
+        } finally {
+            setLoadingArrowId(null)
         }
     }
+
+
 
     const handleToggleChecklistStatus = async (item: any, isEnabled: boolean) => {
         const companyId = company_selected?.id || localStorage.getItem('company_id')
@@ -618,9 +633,9 @@ export default function CompanySettingsPage() {
         }))
     ];
 
-    const renderChecklistManagerTable = (targetType: 'EMPLOYEE_DOC' | 'COMPANY_DOC' | 'COMPANY_LABOR', title: string, description: string) => {
+    const renderChecklistManagerTable = (targetType: 'EMPLOYEE_DOC' | 'EMPLOYEE_TRAINING' | 'COMPANY_DOC' | 'COMPANY_LABOR', title: string, description: string) => {
         const items = requiredDocs.filter(r => r.target === targetType)
-        
+
         return (
             <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white mt-6">
                 <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -628,7 +643,7 @@ export default function CompanySettingsPage() {
                         <CardTitle className="text-slate-800 text-lg font-bold">{title}</CardTitle>
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">{description}</p>
                     </div>
-                    <Button 
+                    <Button
                         onClick={() => {
                             setEditingChecklist(null)
                             setChecklistForm({
@@ -656,6 +671,7 @@ export default function CompanySettingsPage() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-20 text-center">Ordem</TableHead>
                                     <TableHead>Nome do Documento</TableHead>
                                     <TableHead className="w-40! text-center">Validade (dias)</TableHead>
                                     <TableHead className="w-32! text-center">Habilitado</TableHead>
@@ -663,8 +679,36 @@ export default function CompanySettingsPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {items.map((item) => (
+                                {items.map((item, index) => (
                                     <TableRow key={item.id}>
+                                        <TableCell className="w-20 text-center">
+                                            <div className="flex items-center gap-1 justify-center">
+                                                {loadingArrowId === item.id ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                                ) : (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                                            disabled={index === 0}
+                                                            onClick={() => handleMoveRequiredDoc(items, index, "up")}
+                                                        >
+                                                            <ArrowUp className="w-4 h-4 text-slate-500" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
+                                                            disabled={index === items.length - 1}
+                                                            onClick={() => handleMoveRequiredDoc(items, index, "down")}
+                                                        >
+                                                            <ArrowDown className="w-4 h-4 text-slate-500" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="font-semibold text-slate-700">{item.name}</TableCell>
                                         <TableCell className="text-center text-slate-500 tabular-nums">
                                             {item.validityDays ? `${item.validityDays} dias` : "Sem expiração"}
@@ -839,6 +883,7 @@ export default function CompanySettingsPage() {
                             </p>
                         </div>
                         {renderChecklistManagerTable('EMPLOYEE_DOC', 'Checklist de Admissão (Funcionários)', 'Documentação exigida para novos funcionários')}
+                        {renderChecklistManagerTable('EMPLOYEE_TRAINING', 'Treinamentos Padrão (Funcionários)', 'Treinamentos e reciclagens obrigatórios para os funcionários')}
                         {renderChecklistManagerTable('COMPANY_DOC', 'Checklist Corporativo (Empresa)', 'Documentação de segurança e fiscalização da empresa')}
                         {renderChecklistManagerTable('COMPANY_LABOR', 'Checklist Mensal Trabalhista', 'Obrigações trabalhistas e guias de recolhimento')}
                     </TabsContent>
@@ -868,7 +913,7 @@ export default function CompanySettingsPage() {
                         <h3 className="font-bold text-lg text-slate-800">
                             {editingChecklist ? "Editar Documento Padrão" : "Adicionar Documento Padrão"}
                         </h3>
-                        
+
                         <div className="space-y-1.5">
                             <Label className="text-sm font-bold text-slate-700">Nome do Documento</Label>
                             <Input
@@ -878,7 +923,7 @@ export default function CompanySettingsPage() {
                                 className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
                             />
                         </div>
-                        
+
                         <div className="space-y-1.5">
                             <Label className="text-sm font-bold text-slate-700">Categoria (Alvo)</Label>
                             <select
@@ -887,11 +932,12 @@ export default function CompanySettingsPage() {
                                 className="w-full h-11 rounded-xl bg-slate-50/50 border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             >
                                 <option value="EMPLOYEE_DOC">Funcionário (Checklist de Entrada)</option>
+                                <option value="EMPLOYEE_TRAINING">Funcionário (Treinamento Padrão)</option>
                                 <option value="COMPANY_DOC">Empresa (Documento Corporativo)</option>
                                 <option value="COMPANY_LABOR">Trabalhistas (Obrigações Mensais)</option>
                             </select>
                         </div>
-                        
+
                         <div className="space-y-1.5">
                             <Label className="text-sm font-bold text-slate-700">Validade em dias (Opcional)</Label>
                             <Input
@@ -902,7 +948,7 @@ export default function CompanySettingsPage() {
                                 className="h-11 rounded-xl bg-slate-50/50 border-slate-200"
                             />
                         </div>
-                        
+
                         <div className="flex items-center gap-3 justify-between pt-2">
                             <span className="text-sm font-medium text-slate-600">Habilitar para novos cadastros?</span>
                             <Switch
@@ -911,7 +957,7 @@ export default function CompanySettingsPage() {
                                 className="cursor-pointer"
                             />
                         </div>
-                        
+
                         <div className="flex gap-2 pt-4">
                             <Button type="button" variant="outline" onClick={() => setIsChecklistDialogOpen(false)} className="flex-1 py-5 rounded-xl cursor-pointer">
                                 Cancelar
@@ -926,6 +972,57 @@ export default function CompanySettingsPage() {
                             </Button>
                         </div>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
+                <DialogContent className="max-w-md w-full rounded-2xl bg-white p-6 shadow-xl border">
+                    <div className="flex flex-col items-center text-center space-y-4">
+                        <div className="p-3 bg-red-50 text-red-600 rounded-full">
+                            <AlertCircle className="w-8 h-8" />
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-900">Confirmar Exclusão</h3>
+                            <p className="text-sm text-slate-500 mt-2">
+                                Tem certeza que deseja excluir este documento padrão? Isso removerá o controle dele para todos os funcionários e empresa. Esta ação não poderá ser desfeita.
+                            </p>
+                        </div>
+                        <div className="flex gap-3 w-full pt-2">
+                            <Button
+                                variant="outline"
+                                className="w-full rounded-xl cursor-pointer flex-1"
+                                disabled={loading}
+                                onClick={() => setDeleteTarget(null)}
+                            >
+                                Cancelar
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                className="w-full rounded-xl cursor-pointer flex-1 flex items-center justify-center gap-2"
+                                disabled={loading}
+                                onClick={async () => {
+                                    if (!deleteTarget) return
+                                    const companyId = company_selected?.id || localStorage.getItem('company_id')
+                                    if (!companyId) return
+                                    setLoading(true)
+                                    try {
+                                        await deleteCompanyRequiredDocumentAdmin(deleteTarget)
+                                        toast.success("Documento padrão excluído com sucesso!")
+                                        const data = await getCompanyRequiredDocumentsAdmin(companyId)
+                                        setRequiredDocs(data || [])
+                                        setDeleteTarget(null)
+                                    } catch (error: any) {
+                                        toast.error(error?.response?.data?.error || "Erro ao excluir documento padrão")
+                                    } finally {
+                                        setLoading(false)
+                                    }
+                                }}
+                            >
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                Excluir
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </AppLayout>

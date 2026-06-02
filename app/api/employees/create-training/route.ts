@@ -31,6 +31,13 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        const maxTraining = await db.training.findFirst({
+            where: { employeeId: body.employeeId, deletedAt: null },
+            orderBy: { position: "desc" },
+            select: { position: true }
+        })
+        const nextPosition = maxTraining ? maxTraining.position + 1 : 1
+
         const training = await db.training.create({
             data: {
                 employeeId: body.employeeId,
@@ -39,6 +46,7 @@ export async function POST(req: NextRequest) {
                 fileUrl: body.fileUrl || null,
                 issuedAt: body.issuedAt ? parseDateOnly(body.issuedAt) : null,
                 expiresAt: body.expiresAt ? parseDateOnly(body.expiresAt) : null,
+                position: nextPosition
             }
         })
 

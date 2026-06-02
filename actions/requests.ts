@@ -361,7 +361,8 @@ export async function updateEmployeeDocument(payload: {
     expiresAt?: string,
     issuedAt?: string,
     fileUrl?: string | null,
-    clear?: boolean
+    clear?: boolean,
+    name?: string
 }, employee_id: string) {
     try {
         const { data } = await axios.put(
@@ -615,7 +616,8 @@ export async function updateTraining(payload: {
     issuedAt?: string,
     fileUrl?: string | null,
     status?: string,
-    clear?: boolean
+    clear?: boolean,
+    name?: string
 }, employee_id: string) {
     try {
         const { data } = await axios.put(
@@ -1144,6 +1146,20 @@ export async function getCostCenterDetails(id: string) {
     }
 }
 
+export async function toggleCostCenterFavorite(id: string, companyId: string) {
+    try {
+        const { data } = await axios.post(
+            '/cost-centers',
+            { action: 'toggle-favorite', id },
+            { baseURL: base_url }
+        )
+        await getCostCenters(companyId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
 export async function addEmployeeDocument(payload: { employeeId: string; name: string }) {
     try {
         const { data } = await axios.post(
@@ -1256,6 +1272,75 @@ export async function toggleEmployeeTrainingStatus(payload: { employeeId: string
             { baseURL: base_url }
         )
         await getTrainings(payload.employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function deleteEmployeeDocuments(employeeId: string, ids: string[]) {
+    try {
+        const { data } = await axios.post(
+            '/employees/delete-documents',
+            { employeeId, ids },
+            { baseURL: base_url }
+        )
+        await getDocsOfEmployee(employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function deleteEmployeeTrainings(employeeId: string, ids: string[]) {
+    try {
+        const { data } = await axios.post(
+            '/employees/delete-trainings',
+            { employeeId, ids },
+            { baseURL: base_url }
+        )
+        await getTrainings(employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function swapEmployeeDocuments(employeeId: string, id1: string, id2: string) {
+    try {
+        const { data } = await axios.post(
+            '/employees/swap-documents',
+            { employeeId, id1, id2 },
+            { baseURL: base_url }
+        )
+        await getDocsOfEmployee(employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function swapEmployeeTrainings(employeeId: string, id1: string, id2: string) {
+    try {
+        const { data } = await axios.post(
+            '/employees/swap-trainings',
+            { employeeId, id1, id2 },
+            { baseURL: base_url }
+        )
+        await getTrainings(employeeId)
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function swapRequiredDocuments(id1: string, id2: string) {
+    try {
+        const { data } = await axios.post(
+            '/company/swap-required-documents',
+            { id1, id2 },
+            { baseURL: base_url }
+        )
         return data
     } catch (error) {
         throw error

@@ -35,27 +35,72 @@ export async function POST(req: NextRequest) {
                     employeeId: employeeId,
                     deletedAt: null
                 },
-                orderBy: {
-                    updatedAt: "desc",
-                }
+                orderBy: [
+                    { position: "asc" },
+                    { createdAt: "asc" }
+                ]
             }),
             db.companyRequiredDocument.findMany({
                 where: {
                     companyId: employee.companyId,
                     target: "EMPLOYEE_TRAINING",
                     isEnabled: true
-                }
+                },
+                orderBy: [
+                    { position: "asc" },
+                    { createdAt: "asc" }
+                ]
             })
         ])
+
+        // Normalize employee trainings positions in database if any is 0 or duplicates exist
+        const trainingPositions = trainings.map(t => t.position)
+        const hasTrainingZeroOrDuplicates = trainingPositions.some(p => p === 0) || new Set(trainingPositions).size !== trainingPositions.length
+        if (hasTrainingZeroOrDuplicates && trainings.length > 0) {
+            await db.$transaction(
+                trainings.map((t, idx) =>
+                    db.training.update({
+                        where: { id: t.id },
+                        data: { position: idx + 1 }
+                    })
+                )
+            )
+            // Re-fetch trainings
+            trainings.length = 0
+            trainings.push(...(await db.training.findMany({
+                where: { employeeId: employeeId, deletedAt: null },
+                orderBy: [
+                    { position: "asc" },
+                    { createdAt: "asc" }
+                ]
+            })))
+        }
+
+        // Normalize company required trainings positions in database if any is 0 or duplicates exist
+        const reqPositions = requirements.map(r => r.position)
+        const hasReqZeroOrDuplicates = reqPositions.some(p => p === 0) || new Set(reqPositions).size !== reqPositions.length
+        if (hasReqZeroOrDuplicates && requirements.length > 0) {
+            await db.$transaction(
+                requirements.map((req, idx) =>
+                    db.companyRequiredDocument.update({
+                        where: { id: req.id },
+                        data: { position: idx + 1 }
+                    })
+                )
+            )
+            // Re-fetch requirements
+            requirements.length = 0
+            requirements.push(...(await db.companyRequiredDocument.findMany({
+                where: { companyId: employee.companyId, target: "EMPLOYEE_TRAINING", isEnabled: true },
+                orderBy: [
+                    { position: "asc" },
+                    { createdAt: "asc" }
+                ]
+            })))
+        }
  
-        
-        
-        // Keep all real trainings belonging to this employee.
-        // We do not filter them out even if they aren't in the global required checklist,
-        // because the admin can add specific trainings for this specific employee on the fly.
         const mergedTrainings = [...trainings]
 
-        // Add virtual trainings for any required trainings that don't exist in the database yet
         requirements.forEach(req => {
             const exists = trainings.find(t => t.type === "CUSTOM" && t.name === req.name)
             if (!exists) {
@@ -68,14 +113,21 @@ export async function POST(req: NextRequest) {
                     issuedAt: null,
                     expiresAt: null,
                     employeeId: employeeId,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
+                    createdAt: req.createdAt,
+                    updatedAt: req.updatedAt,
                     deletedAt: null,
-                    isEnabled: true // Defaults to enabled
+                    isEnabled: true,
+                    position: req.position
                 } as any)
             }
         })
 
+        mergedTrainings.sort((a, b) => {
+            const posA = a.position ?? 0
+            const posB = b.position ?? 0
+            if (posA !== posB) return posA - posB
+            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        })
 
         return NextResponse.json(mergedTrainings)
     } catch (error) {
