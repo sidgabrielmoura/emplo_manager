@@ -403,8 +403,9 @@ export default function CompanySettingsPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {docList.map(({ type, label }) => {
+                                            const isCustom = type === 'CUSTOM' || (!COMPANY_DOCS.some(d => d.type === type) && !LABOR_DOCS.some(d => d.type === type));
                                             const docData = documents.find(d =>
-                                                isAdditional
+                                                isCustom
                                                     ? (d.type === "CUSTOM" && d.name === label)
                                                     : d.type === type
                                             )
