@@ -2,6 +2,7 @@ import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbidden
 import { NextRequest, NextResponse } from "next/server"
 import db from "@/lib/prisma"
 import JSZip from "jszip"
+import { getPTBRDocuments } from "@/lib/constants/documents"
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,7 +80,7 @@ export async function POST(req: NextRequest) {
               if (!res.ok) return
 
               const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
-              const label = item.name || item.type
+              const label = getPTBRDocuments(item.type, item.name || undefined)
               const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
               const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
 
@@ -102,7 +103,7 @@ export async function POST(req: NextRequest) {
               if (!res.ok) return
 
               const ext = fileUrl.split(".").pop()?.split("?")[0] || "bin"
-              const label = item.name || item.type
+              const label = getPTBRDocuments(item.type, item.name || undefined)
               const safeLabel = label.replace(/[/\\\s:*?"<>|]/g, "_")
               const filename = `${String(index + 1).padStart(2, "0")}_${safeLabel}.${ext}`
 
@@ -117,7 +118,7 @@ export async function POST(req: NextRequest) {
       const allFiles: { fileUrl: string; label: string }[] = (items || []).map(
         (item: { type: string; name?: string | null; fileUrl: string | null }) => ({
           fileUrl: item.fileUrl!,
-          label: item.name || item.type,
+          label: getPTBRDocuments(item.type, item.name || undefined),
         })
       )
 

@@ -38,6 +38,32 @@ export default function EmployeeProfilePage() {
   const closeUpdateEmployeeSheet = useRef<HTMLButtonElement>(null)
   const [docsLoading, setDocsLoading] = useState(true)
   const [trainingsLoading, setTrainingsLoading] = useState(true)
+  const [docWidth, setDocWidth] = useState(250)
+  const [trainingWidth, setTrainingWidth] = useState(250)
+
+  const handleResize = (type: "doc" | "training") => (mouseDownEvent: React.MouseEvent) => {
+    mouseDownEvent.preventDefault()
+    const startWidth = type === "doc" ? docWidth : trainingWidth
+    const startPosition = mouseDownEvent.clientX
+
+    const onMouseMove = (mouseMoveEvent: MouseEvent) => {
+      const delta = mouseMoveEvent.clientX - startPosition
+      const newWidth = Math.max(120, Math.min(600, startWidth + delta))
+      if (type === "doc") {
+        setDocWidth(newWidth)
+      } else {
+        setTrainingWidth(newWidth)
+      }
+    }
+
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove)
+      document.removeEventListener("mouseup", onMouseUp)
+    }
+
+    document.addEventListener("mousemove", onMouseMove)
+    document.addEventListener("mouseup", onMouseUp)
+  }
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -1029,7 +1055,17 @@ export default function EmployeeProfilePage() {
                             />
                           </TableHead>
                           <TableHead className="w-20 text-center">Ordem</TableHead>
-                          <TableHead>Documento</TableHead>
+                          <TableHead
+                            className="relative select-none pr-4"
+                            style={{ width: docWidth, minWidth: docWidth, maxWidth: docWidth }}
+                          >
+                            Documento
+                            <div
+                              onMouseDown={handleResize("doc")}
+                              className="absolute right-0 top-0 h-full w-2 cursor-col-resize select-none hover:bg-emerald-500/20 active:bg-emerald-500/40 border-r border-slate-200"
+                              style={{ touchAction: 'none' }}
+                            />
+                          </TableHead>
                           <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de emissão</TableHead>
@@ -1086,10 +1122,13 @@ export default function EmployeeProfilePage() {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="font-semibold text-slate-700 max-w-[200px] truncate">
-                                <div className="flex items-center gap-2">
+                              <TableCell
+                                className="font-semibold text-slate-700"
+                                style={{ width: docWidth, minWidth: docWidth, maxWidth: docWidth }}
+                              >
+                                <div className="flex items-center gap-2 overflow-hidden">
                                   <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  {getPTBRDocuments(doc.type, doc.name)}
+                                  <span className="truncate">{getPTBRDocuments(doc.type, doc.name)}</span>
                                 </div>
                               </TableCell>
 
@@ -1459,7 +1498,17 @@ export default function EmployeeProfilePage() {
                             />
                           </TableHead>
                           <TableHead className="w-20 text-center">Ordem</TableHead>
-                          <TableHead>Treinamento</TableHead>
+                          <TableHead
+                            className="relative select-none pr-4"
+                            style={{ width: trainingWidth, minWidth: trainingWidth, maxWidth: trainingWidth }}
+                          >
+                            Treinamento
+                            <div
+                              onMouseDown={handleResize("training")}
+                              className="absolute right-0 top-0 h-full w-2 cursor-col-resize select-none hover:bg-emerald-500/20 active:bg-emerald-500/40 border-r border-slate-200"
+                              style={{ touchAction: 'none' }}
+                            />
+                          </TableHead>
                           <TableHead className="w-24! text-center">Habilitar</TableHead>
                           <TableHead className="w-40! text-center">Status</TableHead>
                           <TableHead className="w-40! text-center">Data de realização</TableHead>
@@ -1516,10 +1565,13 @@ export default function EmployeeProfilePage() {
                                   )}
                                 </div>
                               </TableCell>
-                              <TableCell className="font-semibold text-slate-700 max-w-[200px] truncate">
-                                <div className="flex items-center gap-2">
+                              <TableCell
+                                className="font-semibold text-slate-700"
+                                style={{ width: trainingWidth, minWidth: trainingWidth, maxWidth: trainingWidth }}
+                              >
+                                <div className="flex items-center gap-2 overflow-hidden">
                                   <FileText className="w-4 h-4 text-emerald-600 shrink-0" />
-                                  {getPTBRDocuments(training.type, training.name ?? undefined)}
+                                  <span className="truncate">{getPTBRDocuments(training.type, training.name ?? undefined)}</span>
                                 </div>
                               </TableCell>
 

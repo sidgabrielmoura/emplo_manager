@@ -28,11 +28,14 @@ export async function GET(req: NextRequest) {
     const contentType = response.headers.get("content-type") || "application/octet-stream"
     const buffer = await response.arrayBuffer()
 
+    const fallbackFileName = fileName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9.-]/g, "_")
+    const encodedFileName = encodeURIComponent(fileName).replace(/['()]/g, escape).replace(/\*/g, "%2A")
+
     return new NextResponse(buffer, {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
+        "Content-Disposition": `attachment; filename="${fallbackFileName}"; filename*=UTF-8''${encodedFileName}`,
         "Content-Length": buffer.byteLength.toString(),
       },
     })
