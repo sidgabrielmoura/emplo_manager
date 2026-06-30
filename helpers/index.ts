@@ -8,12 +8,16 @@ export function maskCPF(value: string) {
 }
 
 export function maskRG(value: string) {
-    return value
-        .replace(/\D/g, "")
-        .slice(0, 9)
-        .replace(/(\d{2})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d{1})$/, "$1-$2")
+    const clean = value.replace(/[^a-zA-Z0-9]/g, "")
+
+    if (clean.length <= 9) {
+        return clean
+            .replace(/^([a-zA-Z0-9]{2})([a-zA-Z0-9])/, "$1.$2")
+            .replace(/^([a-zA-Z0-9]{2})\.([a-zA-Z0-9]{3})([a-zA-Z0-9])/, "$1.$2.$3")
+            .replace(/^([a-zA-Z0-9]{2})\.([a-zA-Z0-9]{3})\.([a-zA-Z0-9]{3})([a-zA-Z0-9]{1})$/, "$1.$2.$3-$4")
+    }
+
+    return clean.slice(0, 15)
 }
 
 export function maskPhone(value: string) {
