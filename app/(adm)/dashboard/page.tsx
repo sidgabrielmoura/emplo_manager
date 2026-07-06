@@ -26,7 +26,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setMounted(true)
-    getDashboardData(companyStore.company_selected?.id || '')
+    if (companyStore.company_selected?.id) {
+      getDashboardData(companyStore.company_selected.id)
+    }
   }, [companyStore.company_selected?.id])
 
   if (!mounted) return null

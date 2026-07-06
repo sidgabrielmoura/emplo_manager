@@ -29,7 +29,7 @@ function ExpiradoContent() {
             toast.success("Acesso autorizado! Redirecionando...")
             // Small delay to ensure cookies are processed by browser
             setTimeout(() => {
-              router.push("/dashboard")
+              window.location.href = "/dashboard"
             }, 300)
           } else {
             setVerifying(false)

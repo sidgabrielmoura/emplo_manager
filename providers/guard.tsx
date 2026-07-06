@@ -19,8 +19,9 @@ export function GuardProvider({ children }: { children: ReactNode }) {
         const checkInitialAuth = async () => {
             const isSuperAdminRoute = pathname.startsWith("/superadmin")
             const isPassportViewRoute = pathname.startsWith("/passport/view/")
+            const isInfiltrationRoute = pathname.startsWith("/infiltracao")
 
-            if (isPassportViewRoute) {
+            if (isPassportViewRoute || isInfiltrationRoute) {
                 setIsInitialAuthDone(true)
                 return
             }
@@ -48,8 +49,9 @@ export function GuardProvider({ children }: { children: ReactNode }) {
             const isSuperAdminRoute = pathname.startsWith("/superadmin")
             const isLoginRoute = pathname === "/login" || pathname === "/superadmin/login"
             const isPassportViewRoute = pathname.startsWith("/passport/view/")
+            const isInfiltrationRoute = pathname.startsWith("/infiltracao")
 
-            if (isPassportViewRoute) return
+            if (isPassportViewRoute || isInfiltrationRoute) return
 
             let currentUser = userStore.user
             const companyId = localStorage.getItem('company_id')

@@ -49,7 +49,9 @@ export function EmployeesContent() {
   })
 
   useEffect(() => {
-    getEmployees(companyStore.company_selected?.id || '')
+    if (companyStore.company_selected?.id) {
+      getEmployees(companyStore.company_selected.id)
+    }
   }, [companyStore.company_selected?.id])
 
   return (

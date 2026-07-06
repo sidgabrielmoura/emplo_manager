@@ -54,8 +54,8 @@ export function UsersContent() {
   })
 
   useEffect(() => {
-    if (!all_users?.length) {
-      getAllUsers(company.company_selected?.id || '')
+    if (company.company_selected?.id && !all_users?.length) {
+      getAllUsers(company.company_selected.id)
     }
   }, [company.company_selected?.id])
 

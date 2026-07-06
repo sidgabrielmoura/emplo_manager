@@ -132,8 +132,10 @@ export function DocumentsContent() {
   })
 
   useEffect(() => {
-    getDocsDashboard(useCompany.company_selected?.id || '')
-    getDocuments(useCompany.company_selected?.id || '')
+    if (useCompany.company_selected?.id) {
+      getDocsDashboard(useCompany.company_selected.id)
+      getDocuments(useCompany.company_selected.id)
+    }
   }, [useCompany.company_selected?.id])
 
   return (
