@@ -2,6 +2,7 @@ import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { calculateDocumentDates } from "@/lib/docs"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function PUT(req: NextRequest) {
     try {
@@ -41,6 +42,12 @@ export async function PUT(req: NextRequest) {
 
             const hasAccess = await validateCompanyAccess(userId, employee.companyId)
             if (!hasAccess) return forbiddenResponse()
+
+            // Spy validation for virtual document
+            const spyValidation = await validateSpyAction(req, "documents", "edit", { employeeId: body.employeeId })
+            if (!spyValidation.authorized) {
+                return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+            }
 
             let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
             let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null
@@ -101,6 +108,12 @@ export async function PUT(req: NextRequest) {
 
         const hasAccess = await validateCompanyAccess(userId, document.employee.companyId)
         if (!hasAccess) return forbiddenResponse()
+
+        // Spy validation for standard document
+        const spyValidation = await validateSpyAction(req, "documents", "edit", { employeeId: document.employeeId || undefined })
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
 
         let issuedAt = body.issuedAt ? new Date(body.issuedAt) : null
         let expiresAt = body.expiresAt ? new Date(body.expiresAt) : null

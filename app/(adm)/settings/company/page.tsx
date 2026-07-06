@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCompanyStore } from "@/stores/company"
+import { useUserStore } from "@/stores/user"
 import { useSnapshot } from "valtio"
 import { useEffect, useState } from "react"
 import { Building2, Save, Upload, Loader2, ArrowLeft, FileText, CheckCircle2, Clock, AlertCircle, Eye, Download, Pencil, Trash2, ArrowUp, ArrowDown } from "lucide-react"
@@ -58,6 +59,17 @@ const LABOR_DOCS = [
 export default function CompanySettingsPage() {
     const router = useRouter()
     const { company_selected } = useSnapshot(useCompanyStore)
+    const user = useSnapshot(useUserStore).user
+    const isEditDisabled = (user?.role as string) === "ESPIAO" && (user as any).permissions?.["settings"]?.edit !== true
+
+    const verifyAction = () => {
+        if (isEditDisabled) {
+            toast.warning("Seu perfil possui acesso somente para visualização.")
+            return false
+        }
+        return true
+    }
+
     const [loading, setLoading] = useState(false)
     const [documents, setDocuments] = useState<any[]>([])
     const [docsLoading, setDocsLoading] = useState(true)
@@ -95,6 +107,7 @@ export default function CompanySettingsPage() {
 
     const handleSaveChecklist = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!verifyAction()) return
         if (!checklistForm.name.trim()) {
             toast.error("Por favor, preencha o nome do documento.")
             return
@@ -142,6 +155,7 @@ export default function CompanySettingsPage() {
     }
 
     const handleMoveRequiredDoc = async (items: any[], index: number, direction: "up" | "down") => {
+        if (!verifyAction()) return
         const otherIndex = direction === "up" ? index - 1 : index + 1
         if (otherIndex < 0 || otherIndex >= items.length) return
 
@@ -166,6 +180,7 @@ export default function CompanySettingsPage() {
 
 
     const handleToggleChecklistStatus = async (item: any, isEnabled: boolean) => {
+        if (!verifyAction()) return
         const companyId = company_selected?.id || localStorage.getItem('company_id')
         if (!companyId) return
 
@@ -233,6 +248,7 @@ export default function CompanySettingsPage() {
     }, [company_selected, router])
 
     const handleSave = async () => {
+        if (!verifyAction()) return
         setLoading(true)
         try {
             const companyId = company_selected?.id || localStorage.getItem('company_id')
@@ -246,6 +262,7 @@ export default function CompanySettingsPage() {
     }
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!verifyAction()) return
         if (e.target.files && e.target.files[0]) {
             setLoading(true)
             try {
@@ -268,6 +285,7 @@ export default function CompanySettingsPage() {
     }
 
     const handleUploadDocument = async (virtualId?: string, currentFileUrl?: string | null) => {
+        if (!verifyAction()) return
         const companyId = company_selected?.id || localStorage.getItem('company_id')
         if (!companyId) return
         if (!selectedType && !virtualId) return
@@ -543,10 +561,12 @@ export default function CompanySettingsPage() {
                                                                             {docData?.fileUrl && (
                                                                                 <div className="flex justify-end pt-2">
                                                                                     <Button
+                                                                                        disabled={isEditDisabled}
                                                                                         variant="ghost"
                                                                                         size="sm"
                                                                                         className="text-red-500 hover:text-red-600 hover:bg-red-50 gap-2 h-auto py-1 px-2 text-xs font-bold cursor-pointer"
                                                                                         onClick={async () => {
+                                                                                            if (!verifyAction()) return
                                                                                             if (confirm("Tem certeza que deseja remover o arquivo deste documento?")) {
                                                                                                 const vid = isAdditional ? docData?.id : docData?.id
                                                                                                 setUploadLoading(true)
@@ -645,6 +665,7 @@ export default function CompanySettingsPage() {
                         <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">{description}</p>
                     </div>
                     <Button
+                        disabled={isEditDisabled}
                         onClick={() => {
                             setEditingChecklist(null)
                             setChecklistForm({
@@ -692,7 +713,7 @@ export default function CompanySettingsPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                                            disabled={index === 0}
+                                                            disabled={index === 0 || isEditDisabled}
                                                             onClick={() => handleMoveRequiredDoc(items, index, "up")}
                                                         >
                                                             <ArrowUp className="w-4 h-4 text-slate-500" />
@@ -701,7 +722,7 @@ export default function CompanySettingsPage() {
                                                             variant="ghost"
                                                             size="icon"
                                                             className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                                            disabled={index === items.length - 1}
+                                                            disabled={index === items.length - 1 || isEditDisabled}
                                                             onClick={() => handleMoveRequiredDoc(items, index, "down")}
                                                         >
                                                             <ArrowDown className="w-4 h-4 text-slate-500" />
@@ -716,6 +737,7 @@ export default function CompanySettingsPage() {
                                         </TableCell>
                                         <TableCell className="text-center">
                                             <Switch
+                                                disabled={isEditDisabled}
                                                 checked={item.isEnabled !== false}
                                                 onCheckedChange={(checked) => handleToggleChecklistStatus(item, checked)}
                                                 className="cursor-pointer mx-auto"
@@ -724,6 +746,7 @@ export default function CompanySettingsPage() {
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
                                                 <Button
+                                                    disabled={isEditDisabled}
                                                     variant="ghost"
                                                     size="sm"
                                                     className="size-8 p-0 cursor-pointer rounded-lg hover:bg-amber-50 hover:text-amber-600 text-slate-400"
@@ -741,6 +764,7 @@ export default function CompanySettingsPage() {
                                                     <Pencil className="size-4" />
                                                 </Button>
                                                 <Button
+                                                    disabled={isEditDisabled}
                                                     variant="ghost"
                                                     size="sm"
                                                     className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
@@ -788,12 +812,6 @@ export default function CompanySettingsPage() {
                         </TabsTrigger>
                         <TabsTrigger value="standard-docs" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
                             Documentos Padrão (Checklists)
-                        </TabsTrigger>
-                        <TabsTrigger value="company-docs" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
-                            Documentos da Empresa
-                        </TabsTrigger>
-                        <TabsTrigger value="labor-docs" className="rounded-xl data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 font-bold px-6 py-2.5">
-                            Documentos Trabalhistas
                         </TabsTrigger>
                     </TabsList>
 
@@ -867,7 +885,7 @@ export default function CompanySettingsPage() {
                                 </div>
 
                                 <div className="mt-8 flex justify-end">
-                                    <Button onClick={handleSave} disabled={loading} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-8 shadow-lg shadow-emerald-100 cursor-pointer">
+                                    <Button onClick={handleSave} disabled={loading || isEditDisabled} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 px-8 shadow-lg shadow-emerald-100 cursor-pointer">
                                         {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
                                         Salvar Alterações
                                     </Button>
@@ -887,23 +905,6 @@ export default function CompanySettingsPage() {
                         {renderChecklistManagerTable('EMPLOYEE_TRAINING', 'Treinamentos Padrão (Funcionários)', 'Treinamentos e reciclagens obrigatórios para os funcionários')}
                         {renderChecklistManagerTable('COMPANY_DOC', 'Checklist Corporativo (Empresa)', 'Documentação de segurança e fiscalização da empresa')}
                         {renderChecklistManagerTable('COMPANY_LABOR', 'Checklist Mensal Trabalhista', 'Obrigações trabalhistas e guias de recolhimento')}
-                    </TabsContent>
-
-                    <TabsContent value="company-docs" className="mt-8 space-y-8">
-                        {renderDocumentTable(activeCompanyDocs)}
-
-                        {documents.filter(d => d.type === 'CUSTOM' && !activeCompanyDocs.some(ac => ac.label === d.name)).length > 0 && (
-                            renderDocumentTable(
-                                documents
-                                    .filter(d => d.type === 'CUSTOM' && !activeCompanyDocs.some(ac => ac.label === d.name))
-                                    .map(d => ({ type: 'CUSTOM', label: d.name })),
-                                true
-                            )
-                        )}
-                    </TabsContent>
-
-                    <TabsContent value="labor-docs" className="mt-8">
-                        {renderDocumentTable(activeLaborDocs)}
                     </TabsContent>
                 </Tabs>
             </div>
@@ -1000,8 +1001,9 @@ export default function CompanySettingsPage() {
                             <Button
                                 variant="destructive"
                                 className="w-full rounded-xl cursor-pointer flex-1 flex items-center justify-center gap-2"
-                                disabled={loading}
+                                disabled={loading || isEditDisabled}
                                 onClick={async () => {
+                                    if (!verifyAction()) return
                                     if (!deleteTarget) return
                                     const companyId = company_selected?.id || localStorage.getItem('company_id')
                                     if (!companyId) return

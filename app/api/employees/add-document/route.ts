@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { forbiddenResponse, getServerUserId, unauthorizedResponse, validateCompanyAccess } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
@@ -25,6 +26,12 @@ export async function POST(req: NextRequest) {
 
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
+
+        // Spy validation
+        const spyValidation = await validateSpyAction(req, "documents", "edit", { employeeId })
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
 
         const docName = name.trim()
 

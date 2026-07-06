@@ -3,6 +3,7 @@ import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { EmailService } from "@/lib/emails/service"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
@@ -28,11 +29,24 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, body.companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        // Spy Validation
+        const spyValidation = await validateSpyAction(req, "employees", "edit")
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
+
+        if (spyValidation.isSpy) {
+            const spyCcIds = spyValidation.costCenters || []
+            if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
+                return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+            }
+        }
+
         const employee = await db.employee.create({
             data: {
                 name: body.name,
-                email: body.email,
-                cpf: body.cpf,
+                email: body.email.trim().toLowerCase(),
+                cpf: body.cpf.trim().replace(/\D/g, ""),
                 rg: body.rg,
                 gender: body.gender,
                 image: body.image,
@@ -125,7 +139,7 @@ export async function POST(req: NextRequest) {
 
 
         try {
-            const [admins, superadmins] = await Promise.all([
+            const [admins, superadmins, customRecipients] = await Promise.all([
                 db.user.findMany({
                     where: {
                         companyId: body.companyId,
@@ -146,24 +160,35 @@ export async function POST(req: NextRequest) {
                     include: {
                         notificationPreferences: true
                     }
+                }),
+                db.notificationRecipient.findMany({
+                    where: {
+                        companyId: body.companyId,
+                        newEmployeeAlerts: true
+                    }
                 })
             ])
 
             const allToNotify = [
                 ...admins.map(a => ({ name: a.name, email: a.notificationPreferences?.email || a.email })),
-                ...superadmins.map(s => ({ name: s.name, email: s.notificationPreferences?.email || s.email }))
+                ...superadmins.map(s => ({ name: s.name, email: s.notificationPreferences?.email || s.email })),
+                ...customRecipients.map(c => ({ name: c.name, email: c.email }))
             ]
 
-            await Promise.all(allToNotify.map(target => {
+            // Send notifications in the background
+            Promise.all(allToNotify.map(target => {
                 return EmailService.sendNewEmployeeNotification({
                     to: target.email,
                     adminName: target.name,
                     employeeName: employee.name,
-                    position: employee.position
+                    position: employee.position,
+                    companyId: body.companyId
                 })
-            }))
+            })).catch(err => {
+                console.error("BACKGROUND EMAIL SEND ERROR:", err)
+            })
         } catch (emailError) {
-            console.error("FAILED TO SEND NEW EMPLOYEE EMAILS:", emailError)
+            console.error("FAILED TO INITIATE NEW EMPLOYEE EMAILS:", emailError)
         }
 
         return NextResponse.json(employee)

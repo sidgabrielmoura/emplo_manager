@@ -1,8 +1,9 @@
 import db from "@/lib/prisma"
 import { addDays, startOfDay } from "date-fns"
 import { NextRequest, NextResponse } from "next/server"
-import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
+import { getServerUserId, getSessionUser, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { updateExpiredStatuses } from "@/lib/docs"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,11 +19,25 @@ export async function POST(req: NextRequest) {
     const hasAccess = await validateCompanyAccess(userId, company_id)
     if (!hasAccess) return forbiddenResponse()
 
-    
+    // Spy Permission Check
+    const spyValidation = await validateSpyAction(req, "dashboard", "view")
+    if (!spyValidation.authorized) {
+      return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+    }
+
+    const isSpy = spyValidation.isSpy
+    const spyCcIds = spyValidation.costCenters || []
+
     await updateExpiredStatuses(company_id)
 
     const today = startOfDay(new Date())
     const next30Days = addDays(today, 30)
+
+    // Base conditions for employee count queries
+    const employeeBaseWhere: any = { companyId: company_id }
+    if (isSpy) {
+      employeeBaseWhere.costCenterId = { in: spyCcIds }
+    }
 
     const [
       totalEmployees,
@@ -31,31 +46,40 @@ export async function POST(req: NextRequest) {
       terminatedEmployees
     ] = await Promise.all([
       db.employee.count({
-        where: { companyId: company_id }
+        where: employeeBaseWhere
       }),
       db.employee.count({
         where: {
-          companyId: company_id,
+          ...employeeBaseWhere,
           status: "ACTIVE"
         }
       }),
       db.employee.count({
         where: {
-          companyId: company_id,
+          ...employeeBaseWhere,
           status: "BLOCKED"
         }
       }),
       db.employee.count({
         where: {
-          companyId: company_id,
+          ...employeeBaseWhere,
           status: "TERMINATED"
         }
       })
     ])
 
+    // Document base conditions
+    const documentBaseWhere: any = {
+      employee: { companyId: company_id },
+      deletedAt: null
+    }
+    if (isSpy) {
+      documentBaseWhere.employee.costCenterId = { in: spyCcIds }
+    }
+
     const [rawDocuments, companyInfo, requirements] = await Promise.all([
       db.document.findMany({
-        where: { employee: { companyId: company_id }, deletedAt: null }
+        where: documentBaseWhere
       }),
       db.company.findUnique({
         where: { id: company_id },
@@ -88,17 +112,14 @@ export async function POST(req: NextRequest) {
     })
 
     const recentEmployeesData = await db.employee.findMany({
-      where: { companyId: company_id },
+      where: employeeBaseWhere,
       orderBy: { createdAt: 'desc' },
       take: 5,
       select: { id: true, name: true, position: true, createdAt: true }
     });
 
     const recentDocsData = await db.document.findMany({
-      where: {
-        employee: { companyId: company_id },
-        deletedAt: null
-      },
+      where: documentBaseWhere,
       orderBy: { updatedAt: 'desc' },
       take: 5,
       include: { employee: { select: { name: true } } }

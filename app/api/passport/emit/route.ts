@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { EmailService } from "@/lib/emails/service"
 
 export async function POST(req: NextRequest) {
     try {
@@ -36,6 +37,35 @@ export async function POST(req: NextRequest) {
                 employee: true
             }
         })
+
+        // Notify company recipients and emitting admin
+        try {
+            const companyRecipients = await db.notificationRecipient.findMany({
+                where: { companyId: employee.companyId }
+            })
+
+            const targets = companyRecipients.map(r => ({ email: r.email, name: r.name }))
+
+            const adminUser = await db.user.findUnique({
+                where: { id: userId }
+            })
+            if (adminUser) {
+                targets.push({ email: adminUser.email, name: adminUser.name })
+            }
+
+            const uniqueTargets = Array.from(new Map(targets.map(t => [t.email, t])).values())
+
+            for (const target of uniqueTargets) {
+                await EmailService.sendPassportEmissionNotification({
+                    to: target.email,
+                    adminName: target.name,
+                    employeeName: emission.employee.name,
+                    companyId: employee.companyId
+                })
+            }
+        } catch (mailErr) {
+            console.error("Error sending passport emission email:", mailErr)
+        }
 
         return NextResponse.json(emission, { status: 201 })
     } catch (error) {

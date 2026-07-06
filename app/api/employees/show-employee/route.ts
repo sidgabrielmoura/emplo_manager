@@ -1,9 +1,13 @@
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
+        const userId = await getServerUserId(req)
+        if (!userId) return unauthorizedResponse()
+
         const body = await req.json()
         const employeeId = body.id
 
@@ -28,6 +32,15 @@ export async function POST(req: NextRequest) {
 
         if (!employee) {
             return NextResponse.json({ error: "Funcionário não encontrado" }, { status: 404 })
+        }
+
+        const hasAccess = await validateCompanyAccess(userId, employee.companyId)
+        if (!hasAccess) return forbiddenResponse()
+
+        // Spy validation: for profile access, check if cost center is authorized.
+        const spyValidation = await validateSpyAction(req, "employees", "view", { employeeId: employee.id })
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
         }
 
         return NextResponse.json(employee)

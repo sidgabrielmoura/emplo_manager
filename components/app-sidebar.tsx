@@ -12,6 +12,7 @@ const adminNavigation = [
   { name: "Funcionários", href: "/employees", icon: Users },
   { name: "Perfil de Qualificação", href: "/passport", icon: Book },
   { name: "Documentos", href: "/documents", icon: FileText },
+  { name: "Documentos da Empresa", href: "/company-documents", icon: Building2 },
   { name: "Centros de Custo", href: "/cost-centers", icon: DollarSign },
   { name: "Usuários e Funções", href: "/users", icon: UserCog },
   { name: "Configurações", href: "/settings", icon: Settings },

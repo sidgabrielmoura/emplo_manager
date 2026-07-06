@@ -28,12 +28,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getPTBRDocuments } from "@/lib/constants/documents"
 import { maskPhone } from "@/helpers"
 
+import { useUserStore } from "@/stores/user"
+
 export default function EmployeeProfilePage() {
   const employee = useSnapshot(useEmployeesStore).show_employee
   const params = useParams<{ id: string }>()
   const documents = useSnapshot(useEmployeesStore).employee_documents
   const trainings = useSnapshot(useEmployeesStore).employee_trainings
   const costCenters = useSnapshot(useCostCentersStore).costCenters
+
+  const userStore = useSnapshot(useUserStore)
+  const isSpy = (userStore.user?.role as string) === "ESPIAO"
+  const spyPermissions = (userStore.user as any)?.permissions || {}
+  const canEditEmployees = !isSpy || (spyPermissions["employees"]?.edit === true)
+  const canEditDocuments = !isSpy || (spyPermissions["documents"]?.edit === true)
   const [pageLoading, setPageLoading] = useState(true)
   const closeUpdateEmployeeSheet = useRef<HTMLButtonElement>(null)
   const [docsLoading, setDocsLoading] = useState(true)
@@ -119,6 +127,10 @@ export default function EmployeeProfilePage() {
   const [editingTrainingName, setEditingTrainingName] = useState("")
 
   const handleMoveDoc = async (index: number, direction: "up" | "down") => {
+    if (!canEditDocuments) {
+      toast.warning("Seu perfil possui acesso somente para visualização.")
+      return
+    }
     if (!documents || !employee?.id) return
     const otherIndex = direction === "up" ? index - 1 : index + 1
     if (otherIndex < 0 || otherIndex >= documents.length) return
@@ -138,6 +150,10 @@ export default function EmployeeProfilePage() {
   }
 
   const handleMoveTraining = async (index: number, direction: "up" | "down") => {
+    if (!canEditDocuments) {
+      toast.warning("Seu perfil possui acesso somente para visualização.")
+      return
+    }
     if (!trainings || !employee?.id) return
     const otherIndex = direction === "up" ? index - 1 : index + 1
     if (otherIndex < 0 || otherIndex >= trainings.length) return
@@ -234,7 +250,15 @@ export default function EmployeeProfilePage() {
     const companyId = localStorage.getItem('company_id')
 
     setPageLoading(true)
-    showEmployee(params.id)
+    showEmployee(params.id).catch((err) => {
+      const status = err?.response?.status
+      if (status === 403 || status === 404) {
+        toast.error(err?.response?.data?.error || "Acesso negado a este colaborador.")
+        setTimeout(() => {
+          window.location.href = '/employees'
+        }, 1500)
+      }
+    })
     setDocsLoading(true)
     getDocsOfEmployee(params.id).finally(() => setDocsLoading(false))
     setTrainingsLoading(true)
@@ -619,9 +643,10 @@ export default function EmployeeProfilePage() {
                 </div>
               </div>
 
-              <Sheet>
-                <SheetTrigger asChild>
-                  <Button onClick={() => {
+              {canEditEmployees && (
+                <Sheet>
+                  <SheetTrigger asChild>
+                    <Button onClick={() => {
                     setForm({
                       name: employee.name,
                       email: employee.email,
@@ -861,7 +886,8 @@ export default function EmployeeProfilePage() {
 
                   <SheetClose ref={closeUpdateEmployeeSheet} />
                 </SheetContent>
-              </Sheet>
+                </Sheet>
+              )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 text-sm mt-8">
@@ -924,14 +950,26 @@ export default function EmployeeProfilePage() {
                 <span className="font-medium">{maskPhone(employee.contact?.emergencyContact || "")}</span>
               </div>
 
-              {employee.address && (
+              {employee.address && (employee.address.address || employee.address.city || employee.address.cep) ? (
                 <div className="flex flex-col space-y-1 border-b pb-2">
                   <span className="text-muted-foreground">Endereço</span>
                   <span className="font-medium">
-                    {employee.address.address}, {employee.address.number}
-                    {employee.address.complement && ` - ${employee.address.complement}`}
-                    {` - ${employee.address.district}, ${employee.address.city}, ${employee.address.cep}`}
+                    {[
+                      employee.address.address,
+                      employee.address.number,
+                      employee.address.complement,
+                      employee.address.district,
+                      employee.address.city,
+                      employee.address.cep
+                    ]
+                      .filter(val => val && String(val).trim() !== "" && String(val).trim() !== "null")
+                      .join(", ")}
                   </span>
+                </div>
+              ) : (
+                <div className="flex justify-between border-b pb-2">
+                  <span className="text-muted-foreground">Endereço</span>
+                  <span className="font-medium">—</span>
                 </div>
               )}
 
@@ -969,16 +1007,18 @@ export default function EmployeeProfilePage() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Gestão de arquivos e validades</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="gap-2 cursor-pointer"
-                    disabled={selectedDocIds.length === 0}
-                    onClick={() => setDeleteTarget({ type: "document", ids: selectedDocIds })}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Deletar Selecionados ({selectedDocIds.length})
-                  </Button>
+                  {canEditDocuments && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="gap-2 cursor-pointer"
+                      disabled={selectedDocIds.length === 0}
+                      onClick={() => setDeleteTarget({ type: "document", ids: selectedDocIds })}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Deletar Selecionados ({selectedDocIds.length})
+                    </Button>
+                  )}
                   {documents && documents.some((d: any) => d.fileUrl && d.isEnabled !== false) && (
                     <Button
                       variant="outline"
@@ -996,7 +1036,7 @@ export default function EmployeeProfilePage() {
 
               <CardContent className="p-0 px-8">
                 {/* Custom Document Addition Input Group */}
-                {!docsLoading && (
+                {canEditDocuments && !docsLoading && (
                   <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-6 bg-slate-50/50 border-b border-slate-100">
                     <div className="text-sm font-semibold text-slate-700">Adicionar documento personalizado:</div>
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -1104,7 +1144,7 @@ export default function EmployeeProfilePage() {
                                         variant="ghost"
                                         size="icon"
                                         className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                        disabled={index === 0}
+                                        disabled={index === 0 || !canEditDocuments}
                                         onClick={() => handleMoveDoc(index, "up")}
                                       >
                                         <ArrowUp className="w-4 h-4 text-slate-500" />
@@ -1113,7 +1153,7 @@ export default function EmployeeProfilePage() {
                                         variant="ghost"
                                         size="icon"
                                         className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                        disabled={index === documents.length - 1}
+                                        disabled={index === documents.length - 1 || !canEditDocuments}
                                         onClick={() => handleMoveDoc(index, "down")}
                                       >
                                         <ArrowDown className="w-4 h-4 text-slate-500" />
@@ -1135,7 +1175,7 @@ export default function EmployeeProfilePage() {
                               <TableCell className="text-center">
                                 <Switch
                                   checked={doc.isEnabled !== false}
-                                  disabled={togglingDocId === doc.id}
+                                  disabled={!canEditDocuments || togglingDocId === doc.id}
                                   onCheckedChange={(checked) => handleToggleDocStatus(doc.id, checked)}
                                   className="cursor-pointer mx-auto"
                                 />
@@ -1245,23 +1285,46 @@ export default function EmployeeProfilePage() {
                                       }
                                     }}>
                                       <DialogTrigger asChild>
-                                        {doc.fileUrl ? (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2 cursor-pointer"
-                                          >
-                                            <Pencil className="w-4 h-4" />
-                                            Editar
-                                          </Button>
+                                        {!canEditDocuments ? (
+                                          doc.fileUrl ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                              Visualizar
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-not-allowed opacity-50"
+                                              disabled
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Pendente
+                                            </Button>
+                                          )
                                         ) : (
-                                          <Button
-                                            size="sm"
-                                            className="gap-2 cursor-pointer"
-                                          >
-                                            <Upload className="w-4 h-4" />
-                                            Enviar
-                                          </Button>
+                                          doc.fileUrl ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Pencil className="w-4 h-4" />
+                                              Editar
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Enviar
+                                            </Button>
+                                          )
                                         )}
                                       </DialogTrigger>
                                       <DialogContent className="max-w-2xl! w-full rounded-2xl bg-white p-6 shadow-xl border">
@@ -1343,6 +1406,7 @@ export default function EmployeeProfilePage() {
                                                 type="date"
                                                 value={docIssuedAt}
                                                 onChange={e => setDocIssuedAt(e.target.value)}
+                                                disabled={!canEditDocuments}
                                               />
                                             </div>
                                             <div className="space-y-2">
@@ -1351,32 +1415,41 @@ export default function EmployeeProfilePage() {
                                                 type="date"
                                                 value={docExpiresAt}
                                                 onChange={e => setDocExpiresAt(e.target.value)}
+                                                disabled={!canEditDocuments}
                                               />
                                             </div>
                                           </div>
 
                                           <div className="flex justify-end gap-2 pt-2">
-                                            {doc.fileUrl && (
-                                              <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearDocument(doc.id)}>
-                                                Zerar arquivo
-                                              </Button>
+                                            {!canEditDocuments ? (
+                                              <DialogClose asChild>
+                                                <Button variant="secondary" className="cursor-pointer">Fechar</Button>
+                                              </DialogClose>
+                                            ) : (
+                                              <>
+                                                {doc.fileUrl && (
+                                                  <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearDocument(doc.id)}>
+                                                    Zerar arquivo
+                                                  </Button>
+                                                )}
+                                                <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
+                                                <Button
+                                                  className="cursor-pointer gap-2"
+                                                  disabled={loading || (!file && doc.type === 'CUSTOM' && editingDocName === doc.name && !doc.fileUrl)}
+                                                  onClick={() => handleUploadImage(doc.id, doc.fileUrl)}
+                                                >
+                                                  {doc.fileUrl ? 'Salvar alterações' : 'Enviar documento'}
+                                                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                                </Button>
+                                              </>
                                             )}
-                                            <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setDocIssuedAt(''); setDocExpiresAt(''); }}>Limpar</Button>
-                                            <Button
-                                              className="cursor-pointer gap-2"
-                                              disabled={loading || (!file && doc.type === 'CUSTOM' && editingDocName === doc.name && !doc.fileUrl)}
-                                              onClick={() => handleUploadImage(doc.id, doc.fileUrl)}
-                                            >
-                                              {doc.fileUrl ? 'Salvar alterações' : 'Enviar documento'}
-                                              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                            </Button>
                                             <DialogClose ref={closeEditDocModal} />
                                           </div>
                                         </div>
                                       </DialogContent>
                                     </Dialog>
 
-                                    {!doc.id.startsWith("virtual-") && (
+                                    {canEditDocuments && !doc.id.startsWith("virtual-") && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -1412,16 +1485,18 @@ export default function EmployeeProfilePage() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-1">Controle de capacitação técnica</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="gap-2 cursor-pointer"
-                    disabled={selectedTrainingIds.length === 0}
-                    onClick={() => setDeleteTarget({ type: "training", ids: selectedTrainingIds })}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Deletar Selecionados ({selectedTrainingIds.length})
-                  </Button>
+                  {canEditDocuments && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="gap-2 cursor-pointer"
+                      disabled={selectedTrainingIds.length === 0}
+                      onClick={() => setDeleteTarget({ type: "training", ids: selectedTrainingIds })}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Deletar Selecionados ({selectedTrainingIds.length})
+                    </Button>
+                  )}
                   {trainings && trainings.some((t: any) => t.fileUrl && t.isEnabled !== false) && (
                     <Button
                       variant="outline"
@@ -1439,7 +1514,7 @@ export default function EmployeeProfilePage() {
 
               <CardContent className="p-0 px-8">
                 {/* Custom Training Addition Input Group */}
-                {!trainingsLoading && (
+                {canEditDocuments && !trainingsLoading && (
                   <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-6 bg-slate-50/50 border-b border-slate-100">
                     <div className="text-sm font-semibold text-slate-700">Adicionar treinamento personalizado:</div>
                     <div className="flex gap-2 w-full sm:w-auto">
@@ -1547,7 +1622,7 @@ export default function EmployeeProfilePage() {
                                         variant="ghost"
                                         size="icon"
                                         className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                        disabled={index === 0}
+                                        disabled={index === 0 || !canEditDocuments}
                                         onClick={() => handleMoveTraining(index, "up")}
                                       >
                                         <ArrowUp className="w-4 h-4 text-slate-500" />
@@ -1556,7 +1631,7 @@ export default function EmployeeProfilePage() {
                                         variant="ghost"
                                         size="icon"
                                         className="h-7 w-7 p-0 cursor-pointer rounded hover:bg-slate-100 disabled:opacity-30"
-                                        disabled={index === trainings.length - 1}
+                                        disabled={index === trainings.length - 1 || !canEditDocuments}
                                         onClick={() => handleMoveTraining(index, "down")}
                                       >
                                         <ArrowDown className="w-4 h-4 text-slate-500" />
@@ -1578,7 +1653,7 @@ export default function EmployeeProfilePage() {
                               <TableCell className="text-center">
                                 <Switch
                                   checked={training.isEnabled !== false}
-                                  disabled={togglingTrainingId === training.id}
+                                  disabled={!canEditDocuments || togglingTrainingId === training.id}
                                   onCheckedChange={(checked) => handleToggleTrainingStatus(training.id, checked)}
                                   className="cursor-pointer mx-auto"
                                 />
@@ -1637,7 +1712,7 @@ export default function EmployeeProfilePage() {
                                 {training.isEnabled === false ? (
                                   <div className="flex items-center justify-end gap-2">
                                     <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
-                                    {!training.id.startsWith("virtual-") && (
+                                    {canEditDocuments && !training.id.startsWith("virtual-") && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -1682,23 +1757,46 @@ export default function EmployeeProfilePage() {
                                       }
                                     }}>
                                       <DialogTrigger asChild>
-                                        {training.fileUrl ? (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="gap-2 cursor-pointer"
-                                          >
-                                            <Pencil className="w-4 h-4" />
-                                            Editar
-                                          </Button>
+                                        {!canEditDocuments ? (
+                                          training.fileUrl ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Eye className="w-4 h-4" />
+                                              Visualizar
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-not-allowed opacity-50"
+                                              disabled
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Pendente
+                                            </Button>
+                                          )
                                         ) : (
-                                          <Button
-                                            size="sm"
-                                            className="gap-2 cursor-pointer"
-                                          >
-                                            <Upload className="w-4 h-4" />
-                                            Enviar
-                                          </Button>
+                                          training.fileUrl ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Pencil className="w-4 h-4" />
+                                              Editar
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              className="gap-2 cursor-pointer"
+                                            >
+                                              <Upload className="w-4 h-4" />
+                                              Enviar
+                                            </Button>
+                                          )
                                         )}
                                       </DialogTrigger>
                                       <DialogContent className="max-w-2xl! w-full rounded-2xl bg-white p-6 shadow-xl border">
@@ -1782,13 +1880,14 @@ export default function EmployeeProfilePage() {
                                                   value={trainingIssuedAt}
                                                   className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                                                   onChange={(e) => setTrainingIssuedAt(e.target.value)}
+                                                  disabled={!canEditDocuments}
                                                 />
                                               </div>
 
                                               <div className="space-y-1">
                                                 <label className="text-sm font-medium">Data de vencimento</label>
                                                 <Input
-                                                  disabled={!trainingExpire}
+                                                  disabled={!trainingExpire || !canEditDocuments}
                                                   type="date"
                                                   value={trainingExpiresAt}
                                                   className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -1799,32 +1898,40 @@ export default function EmployeeProfilePage() {
 
                                             <div className="flex items-center gap-3 mt-5 justify-end">
                                               <p className="text-sm text-muted-foreground">Este treinamento tem validade?</p>
-                                              <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" />
+                                              <Switch onCheckedChange={(value) => setTrainingExpire(value)} checked={trainingExpire} className="cursor-pointer" disabled={!canEditDocuments} />
                                             </div>
                                           </section>
 
                                           <div className="flex justify-end gap-2 pt-2">
-                                            {training.fileUrl && (
-                                              <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearTraining(training.id)}>
-                                                Zerar arquivo
-                                              </Button>
+                                            {!canEditDocuments ? (
+                                              <DialogClose asChild>
+                                                <Button variant="secondary" className="cursor-pointer">Fechar</Button>
+                                              </DialogClose>
+                                            ) : (
+                                              <>
+                                                {training.fileUrl && (
+                                                  <Button variant="destructive" className="cursor-pointer mr-auto" disabled={loading} onClick={() => handleClearTraining(training.id)}>
+                                                    Zerar arquivo
+                                                  </Button>
+                                                )}
+                                                <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
+                                                <Button
+                                                  className="cursor-pointer gap-2"
+                                                  disabled={loading}
+                                                  onClick={() => handleUploadTraining(training.id, training.fileUrl)}
+                                                >
+                                                  Salvar alterações
+                                                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                                                </Button>
+                                              </>
                                             )}
-                                            <Button variant="secondary" className="cursor-pointer" onClick={() => { setFile(null); setPreview(null); setTrainingIssuedAt(''); setTrainingExpiresAt(''); }}>Limpar</Button>
-                                            <Button
-                                              className="cursor-pointer gap-2"
-                                              disabled={loading}
-                                              onClick={() => handleUploadTraining(training.id, training.fileUrl)}
-                                            >
-                                              Salvar alterações
-                                              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                                            </Button>
                                             <DialogClose ref={closeEditDocModal} />
                                           </div>
                                         </div>
                                       </DialogContent>
                                     </Dialog>
 
-                                    {!training.id.startsWith("virtual-") && (
+                                    {canEditDocuments && !training.id.startsWith("virtual-") && (
                                       <Button
                                         variant="ghost"
                                         size="sm"

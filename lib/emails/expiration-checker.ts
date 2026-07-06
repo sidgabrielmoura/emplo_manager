@@ -49,6 +49,11 @@ export async function checkAndSendExpirationAlerts() {
                                         notificationPreferences: true,
                                     },
                                 },
+                                notificationRecipients: {
+                                    where: {
+                                        documentExpirationAlerts: true,
+                                    },
+                                },
                             },
                         },
                     },
@@ -80,6 +85,11 @@ export async function checkAndSendExpirationAlerts() {
                                         notificationPreferences: true,
                                     },
                                 },
+                                notificationRecipients: {
+                                    where: {
+                                        documentExpirationAlerts: true,
+                                    },
+                                },
                             },
                         },
                     },
@@ -91,13 +101,14 @@ export async function checkAndSendExpirationAlerts() {
             adminEmail: string;
             adminName: string;
             items: { employeeName: string; documentType: string; expiresAt: string }[];
+            companyId?: string;
         }>();
 
         const processItem = (item: any, type: 'document' | 'training') => {
             const itemsLabel = type === 'document' ? item.type : item.type;
             const formattedDate = format(item.expiresAt, "dd/MM/yyyy", { locale: ptBR });
 
-            
+            // 1. Company Users
             if (item.employee?.company?.users) {
                 item.employee.company.users.forEach((user: any) => {
                     const email = user.notificationPreferences?.email || user.email;
@@ -106,6 +117,7 @@ export async function checkAndSendExpirationAlerts() {
                             adminEmail: email,
                             adminName: user.name,
                             items: [],
+                            companyId: item.employee.companyId,
                         });
                     }
                     adminNotifications.get(email)!.items.push({
@@ -116,7 +128,27 @@ export async function checkAndSendExpirationAlerts() {
                 });
             }
 
-            
+            // 2. Custom Recipients
+            if (item.employee?.company?.notificationRecipients) {
+                item.employee.company.notificationRecipients.forEach((rec: any) => {
+                    const email = rec.email;
+                    if (!adminNotifications.has(email)) {
+                        adminNotifications.set(email, {
+                            adminEmail: email,
+                            adminName: rec.name,
+                            items: [],
+                            companyId: item.employee.companyId,
+                        });
+                    }
+                    adminNotifications.get(email)!.items.push({
+                        employeeName: item.employee.name,
+                        documentType: itemsLabel,
+                        expiresAt: formattedDate,
+                    });
+                });
+            }
+
+            // 3. Global Superadmins
             globalSuperadmins.forEach((sa: any) => {
                 const email = sa.notificationPreferences?.email || sa.email;
                 if (!adminNotifications.has(email)) {
@@ -124,6 +156,7 @@ export async function checkAndSendExpirationAlerts() {
                         adminEmail: email,
                         adminName: sa.name,
                         items: [],
+                        companyId: item.employee.companyId,
                     });
                 }
                 adminNotifications.get(email)!.items.push({
@@ -143,6 +176,7 @@ export async function checkAndSendExpirationAlerts() {
                 adminName: notification.adminName,
                 days,
                 expiringItems: notification.items,
+                companyId: notification.companyId,
             });
         }
     }

@@ -5,6 +5,7 @@ import { useEmployeesStore } from '@/stores/employees'
 import { usePassportStore } from '@/stores/passport'
 import { useUserStore } from '@/stores/user'
 import { useCostCentersStore } from '@/stores/cost-centers'
+import { useImportsStore } from '@/stores/imports'
 import axios from 'axios'
 
 const base_url = process.env.NEXT_PUBLIC_API_URL
@@ -21,6 +22,8 @@ export function resetAllCompanyStores() {
     usePassportStore.emissions = null
     useCostCentersStore.costCenters = null
     useCostCentersStore.selectedCostCenter = null
+    useImportsStore.imports = null
+    useImportsStore.activeImport = null
 }
 
 export async function GetCompanies(userId: string) {
@@ -247,7 +250,8 @@ export async function createEmployee(payload: CreateEmployeePayload) {
             }
         )
 
-        await getEmployees(payload.companyId)
+        // Run in background without blocking
+        getEmployees(payload.companyId).catch(console.error)
 
         return data
     } catch (error) {
@@ -1346,4 +1350,175 @@ export async function swapRequiredDocuments(id1: string, id2: string) {
         throw error
     }
 }
+
+export async function getImports(companyId: string) {
+    try {
+        useImportsStore.loading = true
+        const { data } = await axios.post(
+            "/employees/import/list",
+            { companyId },
+            { baseURL: base_url }
+        )
+        useImportsStore.imports = data
+        return data
+    } catch (error) {
+        console.error("getImports error:", error)
+        throw error
+    } finally {
+        useImportsStore.loading = false
+    }
+}
+
+export async function getImportDetails(importId: number) {
+    try {
+        const { data } = await axios.get(
+            `/employees/import/${importId}`,
+            { baseURL: base_url }
+        )
+        useImportsStore.activeImport = data
+        return data
+    } catch (error) {
+        console.error("getImportDetails error:", error)
+        throw error
+    }
+}
+
+export async function uploadImportFile(file: File, companyId: string) {
+    try {
+        useImportsStore.uploading = true
+        const formData = new FormData()
+        formData.append("file", file)
+        formData.append("companyId", companyId)
+
+        const { data } = await axios.post(
+            "/employees/import/upload",
+            formData,
+            {
+                baseURL: base_url,
+                headers: {
+                    "Content-Type": "multipart/form-data"
+                }
+            }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("uploadImportFile error:", error)
+        throw error
+    } finally {
+        useImportsStore.uploading = false
+    }
+}
+
+export async function correctImportItem(itemId: string, fields: any, companyId: string) {
+    try {
+        useImportsStore.processingItem = itemId
+        const { data } = await axios.post(
+            "/employees/import/correct",
+            { itemId, ...fields },
+            { baseURL: base_url }
+        )
+        
+        if (useImportsStore.activeImport) {
+            const index = useImportsStore.activeImport.items.findIndex(i => i.id === itemId)
+            if (index !== -1 && data.item) {
+                useImportsStore.activeImport.items[index] = data.item
+            }
+            if (data.import) {
+                useImportsStore.activeImport.total_processados = data.import.total_processados
+                useImportsStore.activeImport.total_criados = data.import.total_criados
+                useImportsStore.activeImport.total_falhas = data.import.total_falhas
+                useImportsStore.activeImport.status = data.import.status
+                useImportsStore.activeImport.finalizado_em = data.import.finalizado_em
+                useImportsStore.activeImport.tempo_execucao = data.import.tempo_execucao
+            }
+        }
+        
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("correctImportItem error:", error)
+        throw error
+    } finally {
+        useImportsStore.processingItem = null
+    }
+}
+
+export async function getNotificationRecipients(companyId: string) {
+    try {
+        const { data } = await axios.get(
+            `/settings/notifications/recipients?companyId=${companyId}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("getNotificationRecipients error:", error)
+        throw error
+    }
+}
+
+export async function createNotificationRecipient(payload: {
+    companyId: string
+    email: string
+    name: string
+    documentExpirationAlerts: boolean
+    newEmployeeAlerts: boolean
+}) {
+    try {
+        const { data } = await axios.post(
+            "/settings/notifications/recipients",
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("createNotificationRecipient error:", error)
+        throw error
+    }
+}
+
+export async function deleteNotificationRecipient(id: string) {
+    try {
+        const { data } = await axios.delete(
+            `/settings/notifications/recipients/${id}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteNotificationRecipient error:", error)
+        throw error
+    }
+}
+
+export async function updateNotificationRecipient(id: string, payload: {
+    documentExpirationAlerts?: boolean
+    newEmployeeAlerts?: boolean
+}) {
+    try {
+        const { data } = await axios.put(
+            `/settings/notifications/recipients/${id}`,
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("updateNotificationRecipient error:", error)
+        throw error
+    }
+}
+
+export async function getEmailLogs(companyId: string) {
+    try {
+        const { data } = await axios.get(
+            `/settings/notifications/logs?companyId=${companyId}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("getEmailLogs error:", error)
+        throw error
+    }
+}
+
+
 

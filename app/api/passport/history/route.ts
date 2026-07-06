@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
-import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
+import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse, getSessionUser } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
@@ -19,12 +20,22 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        const currentUser = await getSessionUser(req)
+        const isSpy = currentUser?.role === "ESPIAO"
+        const spyCcIds = (currentUser as any)?.costCenters || []
+
+        const whereClause: any = {
+            employee: {
+                companyId
+            }
+        }
+
+        if (isSpy) {
+            whereClause.employee.costCenterId = { in: spyCcIds }
+        }
+
         const emissions = await db.passportEmission.findMany({
-            where: {
-                employee: {
-                    companyId
-                }
-            },
+            where: whereClause,
             include: {
                 employee: true
             },

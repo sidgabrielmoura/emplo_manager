@@ -1,6 +1,7 @@
 import db from "@/lib/prisma";
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth";
 import { NextRequest, NextResponse } from "next/server";
+import { validateSpyAction } from "@/lib/spy-guard";
 
 export async function PUT(req: NextRequest) {
     try {
@@ -19,7 +20,7 @@ export async function PUT(req: NextRequest) {
 
         const existingEmployee = await db.employee.findUnique({
             where: { id },
-            select: { companyId: true }
+            select: { companyId: true, costCenterId: true }
         })
 
         if (!existingEmployee) {
@@ -28,6 +29,22 @@ export async function PUT(req: NextRequest) {
 
         const hasAccess = await validateCompanyAccess(userId, existingEmployee.companyId)
         if (!hasAccess) return forbiddenResponse()
+
+        // Spy Validation
+        const spyValidation = await validateSpyAction(req, "employees", "edit")
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
+
+        if (spyValidation.isSpy) {
+            const spyCcIds = spyValidation.costCenters || []
+            if (existingEmployee.costCenterId && !spyCcIds.includes(existingEmployee.costCenterId)) {
+                return NextResponse.json({ error: "Você não tem permissão para alterar funcionários neste Centro de Custo" }, { status: 403 })
+            }
+            if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
+                return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+            }
+        }
 
         const {
             address,
@@ -41,6 +58,13 @@ export async function PUT(req: NextRequest) {
         const updateData: any = {
             ...restPayload,
         };
+
+        if (updateData.cpf) {
+            updateData.cpf = updateData.cpf.trim().replace(/\D/g, "");
+        }
+        if (updateData.email) {
+            updateData.email = updateData.email.trim().toLowerCase();
+        }
 
         if (dismissedAt) {
             updateData.dismissedAt = new Date(dismissedAt);

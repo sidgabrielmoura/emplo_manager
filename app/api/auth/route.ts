@@ -9,6 +9,20 @@ export async function POST(req: NextRequest) {
             return unauthorizedResponse()
         }
 
+        let parsedPermissions = (user as any).permissions || null
+        if (typeof parsedPermissions === "string") {
+            try {
+                parsedPermissions = JSON.parse(parsedPermissions)
+            } catch {}
+        }
+
+        let parsedCostCenters = (user as any).costCenters || null
+        if (typeof parsedCostCenters === "string") {
+            try {
+                parsedCostCenters = JSON.parse(parsedCostCenters)
+            } catch {}
+        }
+
         return NextResponse.json(
             {
                 authenticated: true,
@@ -17,7 +31,11 @@ export async function POST(req: NextRequest) {
                     email: user.email,
                     role: user.role,
                     name: user.name,
-                    notificationPreferences: user.notificationPreferences
+                    companyId: (user as any).companyId || null,
+                    notificationPreferences: (user as any).notificationPreferences || null,
+                    // Spy-specific fields — only present for ESPIAO role
+                    permissions: parsedPermissions,
+                    costCenters: parsedCostCenters,
                 },
             },
             { status: 200 }

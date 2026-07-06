@@ -1,12 +1,29 @@
 import db from "@/lib/prisma"
-import { NextResponse } from "next/server"
+import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
+import { NextRequest, NextResponse } from "next/server"
+import { validateSpyAction } from "@/lib/spy-guard"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const userId = await getServerUserId(request)
+    if (!userId) return unauthorizedResponse()
+
     const body = await request.json()
     const { companyId, name, city, state, action } = body
 
     if (action === "list") {
+      if (!companyId) {
+        return NextResponse.json({ error: "ID da empresa é obrigatório" }, { status: 400 })
+      }
+      const hasAccess = await validateCompanyAccess(userId, companyId)
+      if (!hasAccess) return forbiddenResponse()
+
+      // Spy validation
+      const spyValidation = await validateSpyAction(request, "cost-centers", "view")
+      if (!spyValidation.authorized) {
+        return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+      }
+
       const costCenters = await db.costCenter.findMany({
         where: { companyId },
         include: {
@@ -54,6 +71,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Centro de custo não encontrado" }, { status: 404 })
       }
 
+      const hasAccess = await validateCompanyAccess(userId, current.companyId)
+      if (!hasAccess) return forbiddenResponse()
+
+      // Spy validation
+      const spyValidation = await validateSpyAction(request, "cost-centers", "edit")
+      if (!spyValidation.authorized) {
+        return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+      }
+
+      if (spyValidation.isSpy) {
+        const spyCcIds = spyValidation.costCenters || []
+        if (!spyCcIds.includes(id)) {
+          return NextResponse.json({ error: "Acesso não autorizado a este Centro de Custo" }, { status: 403 })
+        }
+      }
+
       const nextFav = !current.isFavorite
       const updated = await db.costCenter.update({
         where: { id },
@@ -71,8 +104,18 @@ export async function POST(request: Request) {
       return NextResponse.json(updated)
     }
 
+    // Create cost center action
     if (!name || !companyId) {
       return NextResponse.json({ error: "Nome e ID da empresa são obrigatórios" }, { status: 400 })
+    }
+
+    const hasAccess = await validateCompanyAccess(userId, companyId)
+    if (!hasAccess) return forbiddenResponse()
+
+    // Spy validation
+    const spyValidation = await validateSpyAction(request, "cost-centers", "edit")
+    if (!spyValidation.authorized) {
+      return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
     }
 
     const costCenter = await db.costCenter.create({

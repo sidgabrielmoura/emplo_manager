@@ -12,6 +12,7 @@ import { useCompanyStore } from "@/stores/company"
 import { AppLayout } from "@/components/app-layout"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
+import { SpyPageGuard } from "@/components/spy-page-guard"
 
 export default function PassportHistoryPage() {
     const passportStore = useSnapshot(usePassportStore)

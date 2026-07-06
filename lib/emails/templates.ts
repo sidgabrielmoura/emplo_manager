@@ -96,3 +96,81 @@ export const getNewEmployeeEmailHtml = (data: {
 
   return getBaseEmailTemplate(content, title, "Ver Funcionário", `${data.baseUrl}/employees`);
 };
+
+export const getImportCompletionEmailHtml = (data: {
+  adminName: string;
+  fileName: string;
+  totalFound: number;
+  totalCreated: number;
+  totalFailed: number;
+  baseUrl: string;
+}) => {
+  const title = "Importação em Massa Concluída";
+  const hasErrors = data.totalFailed > 0;
+  
+  const content = `
+    <h1>Olá, ${data.adminName}!</h1>
+    <p>O processamento da sua planilha de importação de funcionários foi concluído.</p>
+    <div class="card">
+      <span class="card-title">Resumo da Importação</span>
+      <p style="margin: 0; font-size: 14px; color: #4b5563;">
+        Arquivo: <strong>${data.fileName}</strong><br>
+        Total encontrado: <strong>${data.totalFound}</strong><br>
+        Criados com sucesso: <span class="highlight" style="color: #22c55e;">${data.totalCreated}</span><br>
+        Falhas de validação: <span class="highlight" style="color: #ef4444;">${data.totalFailed}</span>
+      </p>
+    </div>
+    ${hasErrors ? `
+      <p style="color: #ef4444; font-weight: 600;">⚠️ Atenção: Algumas linhas continham erros e não puderam ser importadas. Você pode corrigir estes funcionários diretamente no painel.</p>
+    ` : '<p>Todos os funcionários foram importados com sucesso!</p>'}
+    <p>Acesse o painel de Criação em Massa para visualizar e gerenciar os detalhes.</p>
+  `;
+
+  return getBaseEmailTemplate(content, title, "Visualizar Importação", `${data.baseUrl}/employees/mass-creation`);
+};
+
+export const getWelcomeEmailHtml = (data: {
+  userName: string;
+  tempPassword?: string;
+  baseUrl: string;
+}) => {
+  const title = "Bem-vindo ao ETX Gestão";
+  const content = `
+    <h1>Olá, ${data.userName}!</h1>
+    <p>Sua conta de acesso ao **ETX Gestão** foi criada com sucesso pelo administrador da sua empresa.</p>
+    <p>Abaixo estão as suas credenciais de acesso para a plataforma:</p>
+    <div class="card">
+      <span class="card-title">Acesso à Plataforma</span>
+      <p style="margin: 0; font-size: 14px; color: #4b5563;">
+        Link: <strong>${data.baseUrl}/login</strong><br>
+        ${data.tempPassword ? `Senha Temporária: <strong>${data.tempPassword}</strong>` : ''}
+      </p>
+    </div>
+    <p>Recomendamos alterar sua senha no primeiro acesso através da aba de "Configurações" para garantir a segurança da sua conta.</p>
+  `;
+
+  return getBaseEmailTemplate(content, title, "Acessar Plataforma", `${data.baseUrl}/login`);
+};
+
+export const getPassportEmissionEmailHtml = (data: {
+  adminName: string;
+  employeeName: string;
+  baseUrl: string;
+}) => {
+  const title = "Passaporte de Segurança Emitido";
+  const content = `
+    <h1>Olá, ${data.adminName}!</h1>
+    <p>Gostaríamos de notificar que o **Passaporte de Segurança do Trabalho** do funcionário listado abaixo foi gerado com sucesso:</p>
+    <div class="card">
+      <span class="card-title">${data.employeeName}</span>
+      <p style="margin: 0; font-size: 14px; color: #4b5563;">
+        Status: <span class="highlight" style="color: #22c55e;">Documento Emitido</span><br>
+        Data de Emissão: <strong>${new Date().toLocaleDateString('pt-BR')}</strong>
+      </p>
+    </div>
+    <p>O Passaporte consolida a conformidade de todos os exames médicos (ASO) e treinamentos de normas regulamentadoras (NRs) do trabalhador, habilitando-o a atuar nas frentes de trabalho.</p>
+    <p>Você pode visualizar o perfil completo do funcionário clicando no botão abaixo.</p>
+  `;
+
+  return getBaseEmailTemplate(content, title, "Visualizar Funcionário", `${data.baseUrl}/employees`);
+};

@@ -12,10 +12,12 @@ import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
 import { getEmployees, emitPassport } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
+import { useUserStore } from "@/stores/user"
 import { AppLayout } from "@/components/app-layout"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { Skeleton } from "@/components/ui/skeleton"
+import { SpyPageGuard } from "@/components/spy-page-guard"
 
 export default function PassportSelectionPage() {
     const [statusFilter, setStatusFilter] = useState("all")
@@ -23,6 +25,7 @@ export default function PassportSelectionPage() {
     const [loading, setLoading] = useState<string | null>(null)
     const useEmployee = useSnapshot(useEmployeesStore)
     const companyStore = useSnapshot(useCompanyStore)
+    const user = useSnapshot(useUserStore).user
     const router = useRouter()
 
     const filteredEmployees = useEmployee.employees?.filter((employee) => {
@@ -35,10 +38,19 @@ export default function PassportSelectionPage() {
     })
 
     useEffect(() => {
-        getEmployees(companyStore.company_selected?.id || '')
+        if (companyStore.company_selected?.id) {
+            getEmployees(companyStore.company_selected.id)
+        }
     }, [companyStore.company_selected?.id])
 
     async function handleEmitPassport(employeeId: string) {
+        if ((user?.role as string) === "ESPIAO") {
+            const perms = (user as any).permissions as Record<string, { view: boolean; edit: boolean }>
+            if (perms["passport"]?.edit !== true) {
+                toast.warning("Seu perfil possui acesso somente para visualização.")
+                return
+            }
+        }
         setLoading(employeeId)
         try {
             await emitPassport(employeeId)
@@ -54,7 +66,18 @@ export default function PassportSelectionPage() {
 
     return (
         <AppLayout>
-            <div className="space-y-6">
+            <SpyPageGuard
+                page="passport"
+                extraActions={
+                    <Link href="/passport/history" className="w-full block">
+                        <Button variant="outline" className="w-full gap-2 cursor-pointer rounded-xl h-11 font-bold mt-2">
+                            <History className="w-4 h-4" />
+                            Ir para Histórico
+                        </Button>
+                    </Link>
+                }
+            >
+                <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Perfil de qualificação</h1>
@@ -191,6 +214,7 @@ export default function PassportSelectionPage() {
                     )}
                 </div>
             </div>
-        </AppLayout>
-    )
+        </SpyPageGuard>
+    </AppLayout>
+  )
 }

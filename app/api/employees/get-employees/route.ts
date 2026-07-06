@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
@@ -8,14 +9,31 @@ export async function POST(req: NextRequest) {
         if (!userId) return unauthorizedResponse()
 
         const { companyId } = await req.json()
+        if (!companyId) {
+            return NextResponse.json({ error: "ID da empresa é obrigatório" }, { status: 400 })
+        }
 
         const hasAccess = await validateCompanyAccess(userId, companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        // Spy validation
+        const spyValidation = await validateSpyAction(req, "employees", "view")
+        const isSpy = spyValidation.isSpy
+        const spyCcIds = spyValidation.costCenters || []
+
+        if (isSpy && spyCcIds.length === 0) {
+            return NextResponse.json({ error: "Nenhum centro de custo autorizado para este espião" }, { status: 403 })
+        } else if (!isSpy && !spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
+
+        const whereClause: any = { companyId }
+        if (isSpy) {
+            whereClause.costCenterId = { in: spyCcIds }
+        }
+
         const response = await db.employee.findMany({
-            where: {
-                companyId
-            },
+            where: whereClause,
             include: {
                 costCenter: true
             }

@@ -14,6 +14,7 @@ import { downloadEmployeeZip, getEmployees } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
+import { useUserStore } from "@/stores/user"
 
 export function EmployeesContent() {
   const [statusFilter, setStatusFilter] = useState("all")
@@ -21,6 +22,10 @@ export function EmployeesContent() {
   const [zipLoadingId, setZipLoadingId] = useState<string | null>(null)
   const useEmployee = useSnapshot(useEmployeesStore)
   const companyStore = useSnapshot(useCompanyStore)
+  const userStore = useSnapshot(useUserStore)
+  const isSpy = (userStore.user?.role as string) === "ESPIAO"
+  const spyPermissions = (userStore.user as any)?.permissions || {}
+  const canEditEmployees = !isSpy || (spyPermissions["employees"]?.edit === true)
 
   async function handleDownloadZip(employeeId: string, employeeName: string) {
     setZipLoadingId(employeeId)
@@ -56,12 +61,35 @@ export function EmployeesContent() {
             Gerenciamento de efetivo e conformidade documental.
           </p>
         </div>
-        <Link href={'/add-employee'} className="w-full sm:w-auto">
-          <Button className="w-full sm:w-auto gap-2 cursor-pointer text-white rounded-xl shadow-lg shadow-emerald-100 px-6 h-11 font-bold">
-            <Plus className="w-4 h-4" />
-            Novo Funcionário
-          </Button>
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {canEditEmployees ? (
+            <Link href={'/employees/mass-creation'} className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto gap-2 cursor-pointer rounded-xl h-11 font-bold border-slate-200 text-slate-600 hover:bg-slate-50">
+                <FileDown className="w-4 h-4" />
+                Criação em Massa
+              </Button>
+            </Link>
+          ) : (
+            <Button disabled variant="outline" className="w-full sm:w-auto gap-2 rounded-xl h-11 font-bold border-slate-200 text-slate-600 opacity-50 cursor-not-allowed">
+              <FileDown className="w-4 h-4" />
+              Criação em Massa
+            </Button>
+          )}
+
+          {canEditEmployees ? (
+            <Link href={'/add-employee'} className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto gap-2 cursor-pointer text-white rounded-xl shadow-lg shadow-emerald-100 px-6 h-11 font-bold">
+                <Plus className="w-4 h-4" />
+                Novo Funcionário
+              </Button>
+            </Link>
+          ) : (
+            <Button disabled className="w-full sm:w-auto gap-2 text-white rounded-xl px-6 h-11 font-bold opacity-50 cursor-not-allowed">
+              <Plus className="w-4 h-4" />
+              Novo Funcionário
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card className="rounded-3xl border-slate-100 shadow-sm bg-white overflow-hidden">

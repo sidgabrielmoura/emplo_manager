@@ -2,6 +2,7 @@ import db from "@/lib/prisma"
 import bcrypt from 'bcrypt'
 import { getSessionUser, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { EmailService } from "@/lib/emails/service"
 
 export async function POST(req: NextRequest) {
     try {
@@ -30,6 +31,18 @@ export async function POST(req: NextRequest) {
                 }
             }
         })
+
+        // Send welcome email
+        try {
+            await EmailService.sendWelcomeEmail({
+                to: email,
+                userName: name,
+                tempPassword: password,
+                companyId
+            })
+        } catch (mailErr) {
+            console.error("Error sending welcome email:", mailErr)
+        }
 
         return NextResponse.json({ user }, { status: 201 })
     } catch (error) {
