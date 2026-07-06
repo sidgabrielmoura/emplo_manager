@@ -390,8 +390,7 @@ export default function InfiltrationSettingsPage() {
 
   return (
     <AppLayout>
-      <div className="w-full max-w-7xl mx-auto p-4 md:p-8 space-y-6">
-        {/* Header */}
+      <div className="w-full max-w-7xl mx-auto space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
@@ -404,8 +403,7 @@ export default function InfiltrationSettingsPage() {
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                <ShieldAlert className="w-7 h-7 text-purple-600 animate-pulse" />
-                Módulo de Infiltração (Acesso Espião)
+                Módulo de Infiltração
               </h1>
             </div>
             <p className="text-sm text-slate-500 font-medium">
@@ -700,11 +698,11 @@ export default function InfiltrationSettingsPage() {
                       const isSecurityPage = page.key === "settings" || page.key === "users"
                       const hasSelectedCc = formCostCenters.length > 0
                       const isCostCentersViewDisabled = page.key === "cost-centers" && hasSelectedCc
-                      
-                      const isViewChecked = isSecurityPage 
-                        ? false 
+
+                      const isViewChecked = isSecurityPage
+                        ? false
                         : (isCostCentersViewDisabled ? true : pagePerm.view)
-                        
+
                       const isEditChecked = isSecurityPage ? false : pagePerm.edit
 
                       return (
@@ -762,8 +760,8 @@ export default function InfiltrationSettingsPage() {
                       Centros de Custo Autorizados *
                     </h4>
                     <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                      {formCostCenters.length === 0 
-                        ? "Nenhum centro de custo selecionado" 
+                      {formCostCenters.length === 0
+                        ? "Nenhum centro de custo selecionado"
                         : `${formCostCenters.length} ${formCostCenters.length === 1 ? "centro selecionado" : "centros selecionados"}`
                       }
                     </p>
