@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        if (isSpy) {
+        if (isSpy && spyCcIds.length > 0) {
             whereClause.employee.costCenterId = { in: spyCcIds }
         }
 

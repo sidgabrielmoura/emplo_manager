@@ -47,7 +47,7 @@ export async function GET(
 
     if (spyValidation.isSpy) {
       const spyCcIds = spyValidation.costCenters || []
-      if (!spyCcIds.includes(id)) {
+      if (spyCcIds.length > 0 && !spyCcIds.includes(id)) {
         return NextResponse.json({ error: "Acesso não autorizado a este Centro de Custo" }, { status: 403 })
       }
     }
@@ -92,7 +92,7 @@ export async function PUT(
 
     if (spyValidation.isSpy) {
       const spyCcIds = spyValidation.costCenters || []
-      if (!spyCcIds.includes(id)) {
+      if (spyCcIds.length > 0 && !spyCcIds.includes(id)) {
         return NextResponse.json({ error: "Acesso não autorizado a este Centro de Custo" }, { status: 403 })
       }
     }
@@ -149,7 +149,7 @@ export async function DELETE(
 
     if (spyValidation.isSpy) {
       const spyCcIds = spyValidation.costCenters || []
-      if (!spyCcIds.includes(id)) {
+      if (spyCcIds.length > 0 && !spyCcIds.includes(id)) {
         return NextResponse.json({ error: "Acesso não autorizado a este Centro de Custo" }, { status: 403 })
       }
     }

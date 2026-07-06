@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
 
         if (spyValidation.isSpy) {
             const spyCcIds = spyValidation.costCenters || []
-            if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
-                return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+            if (spyCcIds.length > 0) {
+                if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
+                    return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+                }
             }
         }
 

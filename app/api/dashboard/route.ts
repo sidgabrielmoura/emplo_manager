@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
     // Base conditions for employee count queries
     const employeeBaseWhere: any = { companyId: company_id }
-    if (isSpy) {
+    if (isSpy && spyCcIds.length > 0) {
       employeeBaseWhere.costCenterId = { in: spyCcIds }
     }
 
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
       employee: { companyId: company_id },
       deletedAt: null
     }
-    if (isSpy) {
+    if (isSpy && spyCcIds.length > 0) {
       documentBaseWhere.employee.costCenterId = { in: spyCcIds }
     }
 

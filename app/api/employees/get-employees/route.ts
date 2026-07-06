@@ -21,14 +21,12 @@ export async function POST(req: NextRequest) {
         const isSpy = spyValidation.isSpy
         const spyCcIds = spyValidation.costCenters || []
 
-        if (isSpy && spyCcIds.length === 0) {
-            return NextResponse.json({ error: "Nenhum centro de custo autorizado para este espião" }, { status: 403 })
-        } else if (!isSpy && !spyValidation.authorized) {
+        if (!spyValidation.authorized) {
             return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
         }
 
         const whereClause: any = { companyId }
-        if (isSpy) {
+        if (isSpy && spyCcIds.length > 0) {
             whereClause.costCenterId = { in: spyCcIds }
         }
 

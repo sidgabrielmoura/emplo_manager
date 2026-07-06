@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
       if (spyValidation.isSpy) {
         const spyCcIds = spyValidation.costCenters || []
-        if (!spyCcIds.includes(id)) {
+        if (spyCcIds.length > 0 && !spyCcIds.includes(id)) {
           return NextResponse.json({ error: "Acesso não autorizado a este Centro de Custo" }, { status: 403 })
         }
       }

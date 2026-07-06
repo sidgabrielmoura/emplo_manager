@@ -38,11 +38,13 @@ export async function PUT(req: NextRequest) {
 
         if (spyValidation.isSpy) {
             const spyCcIds = spyValidation.costCenters || []
-            if (existingEmployee.costCenterId && !spyCcIds.includes(existingEmployee.costCenterId)) {
-                return NextResponse.json({ error: "Você não tem permissão para alterar funcionários neste Centro de Custo" }, { status: 403 })
-            }
-            if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
-                return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+            if (spyCcIds.length > 0) {
+                if (existingEmployee.costCenterId && !spyCcIds.includes(existingEmployee.costCenterId)) {
+                    return NextResponse.json({ error: "Você não tem permissão para alterar funcionários neste Centro de Custo" }, { status: 403 })
+                }
+                if (body.costCenterId && !spyCcIds.includes(body.costCenterId)) {
+                    return NextResponse.json({ error: "Você não tem permissão para associar funcionários a este Centro de Custo" }, { status: 403 })
+                }
             }
         }
 

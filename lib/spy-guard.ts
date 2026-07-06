@@ -109,45 +109,47 @@ export async function validateSpyAction(
       }
 
       // 3. Page permitted but check extra Cost Center constraints if options provided
-      if (options?.costCenterId) {
-        if (!costCenters.includes(options.costCenterId)) {
-          await logSpyAction({
-            spyAccessId,
-            action: "BLOCKED_ATTEMPT",
-            details: `Tentativa bloqueada de acessar centro de custo não autorizado: ${options.costCenterId}`,
-            ip: getClientIp(req)
-          })
-          return {
-            authorized: false,
-            isSpy: true,
-            reason: "Centro de custo não autorizado para este perfil espião",
-            spyAccessId,
-            spySessionId,
-            costCenters
+      if (costCenters.length > 0) {
+        if (options?.costCenterId) {
+          if (!costCenters.includes(options.costCenterId)) {
+            await logSpyAction({
+              spyAccessId,
+              action: "BLOCKED_ATTEMPT",
+              details: `Tentativa bloqueada de acessar centro de custo não autorizado: ${options.costCenterId}`,
+              ip: getClientIp(req)
+            })
+            return {
+              authorized: false,
+              isSpy: true,
+              reason: "Centro de custo não autorizado para este perfil espião",
+              spyAccessId,
+              spySessionId,
+              costCenters
+            }
           }
         }
-      }
 
-      if (options?.employeeId) {
-        const employee = await db.employee.findUnique({
-          where: { id: options.employeeId },
-          select: { costCenterId: true, name: true }
-        })
-
-        if (!employee || !employee.costCenterId || !costCenters.includes(employee.costCenterId)) {
-          await logSpyAction({
-            spyAccessId,
-            action: "BLOCKED_ATTEMPT",
-            details: `Tentativa bloqueada de acessar dados do funcionário ${employee?.name || options.employeeId} (centro de custo não autorizado)`,
-            ip: getClientIp(req)
+        if (options?.employeeId) {
+          const employee = await db.employee.findUnique({
+            where: { id: options.employeeId },
+            select: { costCenterId: true, name: true }
           })
-          return {
-            authorized: false,
-            isSpy: true,
-            reason: "Funcionário pertence a um centro de custo não autorizado",
-            spyAccessId,
-            spySessionId,
-            costCenters
+
+          if (!employee || !employee.costCenterId || !costCenters.includes(employee.costCenterId)) {
+            await logSpyAction({
+              spyAccessId,
+              action: "BLOCKED_ATTEMPT",
+              details: `Tentativa bloqueada de acessar dados do funcionário ${employee?.name || options.employeeId} (centro de custo não autorizado)`,
+              ip: getClientIp(req)
+            })
+            return {
+              authorized: false,
+              isSpy: true,
+              reason: "Funcionário pertence a um centro de custo não autorizado",
+              spyAccessId,
+              spySessionId,
+              costCenters
+            }
           }
         }
       }
