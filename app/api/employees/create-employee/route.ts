@@ -145,9 +145,10 @@ export async function POST(req: NextRequest) {
                 db.user.findMany({
                     where: {
                         companyId: body.companyId,
-                        notificationPreferences: {
-                            newEmployeeAlerts: true
-                        }
+                        OR: [
+                            { notificationPreferences: { newEmployeeAlerts: true } },
+                            { notificationPreferences: null }
+                        ]
                     },
                     include: {
                         notificationPreferences: true
@@ -155,9 +156,10 @@ export async function POST(req: NextRequest) {
                 }),
                 db.superadmin.findMany({
                     where: {
-                        notificationPreferences: {
-                            newEmployeeAlerts: true
-                        }
+                        OR: [
+                            { notificationPreferences: { newEmployeeAlerts: true } },
+                            { notificationPreferences: null }
+                        ]
                     },
                     include: {
                         notificationPreferences: true
@@ -171,11 +173,15 @@ export async function POST(req: NextRequest) {
                 })
             ])
 
-            const allToNotify = [
-                ...admins.map(a => ({ name: a.name, email: a.notificationPreferences?.email || a.email })),
-                ...superadmins.map(s => ({ name: s.name, email: s.notificationPreferences?.email || s.email })),
-                ...customRecipients.map(c => ({ name: c.name, email: c.email }))
+            const rawTargets = [
+                ...admins.map(a => ({ name: a.name, email: (a.notificationPreferences?.email || a.email).trim().toLowerCase() })),
+                ...superadmins.map(s => ({ name: s.name, email: (s.notificationPreferences?.email || s.email).trim().toLowerCase() })),
+                ...customRecipients.map(c => ({ name: c.name, email: c.email.trim().toLowerCase() }))
             ]
+
+            const allToNotify = Array.from(
+                new Map(rawTargets.filter(t => !!t.email).map(t => [t.email, t])).values()
+            )
 
             // Send notifications in the background
             Promise.all(allToNotify.map(target => {

@@ -3,7 +3,7 @@ import { getExpirationEmailHtml, getNewEmployeeEmailHtml, getImportCompletionEma
 import db from '@/lib/prisma';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'ETX Gestão <onboarding@resend.dev>';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'ETX Gestão <onboarding@xn--etxgesto-xza.com.br>';
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export class EmailService {

@@ -9,8 +9,9 @@ export async function POST(req: NextRequest) {
         const userId = await getServerUserId(req)
         if (!userId) return unauthorizedResponse()
 
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'ETX Gestão <onboarding@xn--etxgesto-xza.com.br>';
         const { data, error } = await resend.emails.send({
-            from: 'ETX Gestão <onboarding@resend.dev>',
+            from: fromEmail,
             to: ['sidgabrielmoura40@gmail.com'],
             subject: 'Hello world',
             html: '<h1>Welcome, John!</h1><p>This is a test email from your local environment.</p>',
