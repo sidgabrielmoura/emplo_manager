@@ -12,19 +12,6 @@ export async function checkAndSendExpirationAlerts() {
         const startDate = startOfDay(targetDate);
         const endDate = endOfDay(targetDate);
 
-        // Fetch global superadmins who haven't explicitly disabled alerts (or where preferences are not yet set)
-        const globalSuperadmins = await db.superadmin.findMany({
-            where: {
-                OR: [
-                    { notificationPreferences: { documentExpirationAlerts: true } },
-                    { notificationPreferences: null },
-                ],
-            },
-            include: {
-                notificationPreferences: true,
-            },
-        });
-
         // 1. Employee Documents
         const expiringDocuments = await db.document.findMany({
             where: {
@@ -49,17 +36,6 @@ export async function checkAndSendExpirationAlerts() {
                     include: {
                         company: {
                             include: {
-                                users: {
-                                    where: {
-                                        OR: [
-                                            { notificationPreferences: { documentExpirationAlerts: true } },
-                                            { notificationPreferences: null },
-                                        ],
-                                    },
-                                    include: {
-                                        notificationPreferences: true,
-                                    },
-                                },
                                 notificationRecipients: {
                                     where: {
                                         documentExpirationAlerts: true,
@@ -96,17 +72,6 @@ export async function checkAndSendExpirationAlerts() {
                     include: {
                         company: {
                             include: {
-                                users: {
-                                    where: {
-                                        OR: [
-                                            { notificationPreferences: { documentExpirationAlerts: true } },
-                                            { notificationPreferences: null },
-                                        ],
-                                    },
-                                    include: {
-                                        notificationPreferences: true,
-                                    },
-                                },
                                 notificationRecipients: {
                                     where: {
                                         documentExpirationAlerts: true,
@@ -136,17 +101,6 @@ export async function checkAndSendExpirationAlerts() {
             include: {
                 company: {
                     include: {
-                        users: {
-                            where: {
-                                OR: [
-                                    { notificationPreferences: { documentExpirationAlerts: true } },
-                                    { notificationPreferences: null },
-                                ],
-                            },
-                            include: {
-                                notificationPreferences: true,
-                            },
-                        },
                         notificationRecipients: {
                             where: {
                                 documentExpirationAlerts: true,
@@ -157,9 +111,9 @@ export async function checkAndSendExpirationAlerts() {
             },
         });
 
-        const adminNotifications = new Map<string, {
-            adminEmail: string;
-            adminName: string;
+        const recipientNotifications = new Map<string, {
+            email: string;
+            name: string;
             items: { employeeName: string; documentType: string; expiresAt: string }[];
             companyId?: string;
         }>();
@@ -173,17 +127,17 @@ export async function checkAndSendExpirationAlerts() {
             const normalizedEmail = email.trim().toLowerCase();
             if (!normalizedEmail) return;
 
-            if (!adminNotifications.has(normalizedEmail)) {
-                adminNotifications.set(normalizedEmail, {
-                    adminEmail: normalizedEmail,
-                    adminName: name,
+            if (!recipientNotifications.has(normalizedEmail)) {
+                recipientNotifications.set(normalizedEmail, {
+                    email: normalizedEmail,
+                    name: name || "Gestor",
                     items: [],
                     companyId,
                 });
             }
 
-            const recipientObj = adminNotifications.get(normalizedEmail)!;
-            // Prevent duplicate item entries
+            const recipientObj = recipientNotifications.get(normalizedEmail)!;
+            // Prevent duplicate item entries in the same email
             const exists = recipientObj.items.some(
                 i => i.employeeName === itemData.employeeName &&
                      i.documentType === itemData.documentType &&
@@ -210,31 +164,12 @@ export async function checkAndSendExpirationAlerts() {
                 expiresAt: formattedDate,
             };
 
-            // 1. Company Users
-            if (company?.users) {
-                company.users.forEach((user: any) => {
-                    const email = user.notificationPreferences?.email || user.email;
-                    addItemToRecipient(email, user.name || "Administrador", companyId, itemData);
-                });
-            }
-
-            // 2. Custom Notification Recipients
+            // Send exclusively to company custom notification recipients
             if (company?.notificationRecipients) {
                 company.notificationRecipients.forEach((rec: any) => {
-                    addItemToRecipient(rec.email, rec.name || "Gestor", companyId, itemData);
+                    addItemToRecipient(rec.email, rec.name, companyId, itemData);
                 });
             }
-
-            // 3. Global Superadmins
-            globalSuperadmins.forEach((sa: any) => {
-                const email = sa.notificationPreferences?.email || sa.email;
-                const companyName = company?.name ? ` [${company.name}]` : "";
-                addItemToRecipient(email, sa.name || "Superadmin", companyId, {
-                    employeeName: `${employeeName}${companyName}`,
-                    documentType: itemsLabel,
-                    expiresAt: formattedDate,
-                });
-            });
         };
 
         const processCompanyDocItem = (item: any) => {
@@ -251,38 +186,24 @@ export async function checkAndSendExpirationAlerts() {
                 expiresAt: formattedDate,
             };
 
-            // 1. Company Users
-            if (company.users) {
-                company.users.forEach((user: any) => {
-                    const email = user.notificationPreferences?.email || user.email;
-                    addItemToRecipient(email, user.name || "Administrador", companyId, itemData);
-                });
-            }
-
-            // 2. Custom Notification Recipients
+            // Send exclusively to company custom notification recipients
             if (company.notificationRecipients) {
                 company.notificationRecipients.forEach((rec: any) => {
-                    addItemToRecipient(rec.email, rec.name || "Gestor", companyId, itemData);
+                    addItemToRecipient(rec.email, rec.name, companyId, itemData);
                 });
             }
-
-            // 3. Global Superadmins
-            globalSuperadmins.forEach((sa: any) => {
-                const email = sa.notificationPreferences?.email || sa.email;
-                addItemToRecipient(email, sa.name || "Superadmin", companyId, itemData);
-            });
         };
 
         expiringDocuments.forEach(doc => processEmployeeItem(doc, 'document'));
         expiringTrainings.forEach(training => processEmployeeItem(training, 'training'));
         expiringCompanyDocs.forEach(compDoc => processCompanyDocItem(compDoc));
 
-        // Dispatch alerts to all recipients who have expiring items
-        for (const notification of adminNotifications.values()) {
+        // Dispatch alerts exclusively to recipients with expiring items
+        for (const notification of recipientNotifications.values()) {
             if (notification.items.length > 0) {
                 await EmailService.sendExpirationAlert({
-                    to: notification.adminEmail,
-                    adminName: notification.adminName,
+                    to: notification.email,
+                    adminName: notification.name,
                     days,
                     expiringItems: notification.items,
                     companyId: notification.companyId,
