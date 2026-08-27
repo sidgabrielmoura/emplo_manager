@@ -1444,6 +1444,21 @@ export async function correctImportItem(itemId: string, fields: any, companyId: 
     }
 }
 
+export async function retryImport(importId: number, companyId: string) {
+    try {
+        const { data } = await axios.post(
+            `/employees/import/${importId}/retry`,
+            {},
+            { baseURL: base_url }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("retryImport error:", error)
+        throw error
+    }
+}
+
 export async function getNotificationRecipients(companyId: string) {
     try {
         const { data } = await axios.get(

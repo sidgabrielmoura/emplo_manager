@@ -2,6 +2,7 @@ import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { processImportItem } from "@/lib/import-queue"
+import { validateSpyAction } from "@/lib/spy-guard"
 
 export async function POST(req: NextRequest) {
     try {
@@ -32,6 +33,12 @@ export async function POST(req: NextRequest) {
 
         const hasAccess = await validateCompanyAccess(userId, item.importacao.companyId)
         if (!hasAccess) return forbiddenResponse()
+
+        // Validate spy permissions
+        const spyValidation = await validateSpyAction(req, "employees", "edit")
+        if (!spyValidation.authorized) {
+            return NextResponse.json({ error: spyValidation.reason || "Não autorizado" }, { status: 403 })
+        }
 
         // Update item with the corrected fields and reset status to PENDING
         await db.importItem.update({

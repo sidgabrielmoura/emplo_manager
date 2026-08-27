@@ -1,48 +1,84 @@
+import * as XLSX from "xlsx"
 import db from "@/lib/prisma"
 import { EmailService } from "@/lib/emails/service"
 
 // Standard date parsing function
 export function parseExcelDate(val: any): Date | null {
     if (!val) return null
-    if (val instanceof Date) return isNaN(val.getTime()) ? null : val
-    
-    if (typeof val === "number") {
-        // Excel serial date number
-        const date = new Date((val - 25569) * 86400 * 1000)
-        return isNaN(date.getTime()) ? null : date
+    if (val instanceof Date) {
+        if (isNaN(val.getTime())) return null
+        const y = val.getFullYear()
+        if (y < 1900 || y > 2100) return null
+        return new Date(val.getFullYear(), val.getMonth(), val.getDate(), 12, 0, 0)
     }
-    
-    if (typeof val === "string") {
-        const clean = val.trim()
-        if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) {
-            const date = new Date(clean)
-            return isNaN(date.getTime()) ? null : date
+
+    const clean = String(val).trim()
+    if (!clean) return null
+
+    // 1. If it's an Excel serial date number (number or numeric string, e.g. 33559 or "33559")
+    if (typeof val === "number" || /^\d+(\.\d+)?$/.test(clean)) {
+        const num = typeof val === "number" ? val : parseFloat(clean)
+        if (!isNaN(num) && num >= 1 && num <= 100000) {
+            try {
+                const parsedObj = XLSX.SSF.parse_date_code(num)
+                if (parsedObj && parsedObj.y >= 1900 && parsedObj.y <= 2100) {
+                    const date = new Date(parsedObj.y, parsedObj.m - 1, parsedObj.d, 12, 0, 0)
+                    return isNaN(date.getTime()) ? null : date
+                }
+            } catch (e) {
+                // Ignore and try fallback
+            }
         }
-        // Check for DD/MM/YYYY
-        const parts = clean.split("/")
-        if (parts.length === 3) {
+    }
+
+    // 2. YYYY-MM-DD or YYYY/MM/DD
+    if (/^\d{4}[-/]\d{2}[-/]\d{2}/.test(clean)) {
+        const parts = clean.substring(0, 10).split(/[-/]/)
+        const year = parseInt(parts[0], 10)
+        const month = parseInt(parts[1], 10) - 1
+        const day = parseInt(parts[2], 10)
+        if (year < 1900 || year > 2100 || month < 0 || month > 11 || day < 1 || day > 31) {
+            return null
+        }
+        const date = new Date(year, month, day, 12, 0, 0)
+        if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+            return null
+        }
+        return date
+    }
+
+    // 3. DD/MM/YYYY or DD-MM-YYYY (and DD/MM/YY)
+    if (/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/.test(clean)) {
+        const parts = clean.split(/[-/]/)
+        if (parts.length >= 3) {
             const day = parseInt(parts[0], 10)
             const month = parseInt(parts[1], 10) - 1
-            const year = parseInt(parts[2], 10)
-            
-            // Check range boundaries explicitly
-            if (day < 1 || day > 31 || month < 0 || month > 11 || year < 1800 || year > 2100) {
+            let year = parseInt(parts[2], 10)
+
+            if (year < 100) {
+                year += year > 50 ? 1900 : 2000
+            }
+
+            if (day < 1 || day > 31 || month < 0 || month > 11 || year < 1900 || year > 2100) {
                 return null
             }
-            
-            // Using year, month, day constructor
-            const date = new Date(year, month, day)
-            if (isNaN(date.getTime())) return null
-            
-            // Check for Date rollover (e.g. 31/02/2021 becomes 03/03/2021)
-            if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+
+            const date = new Date(year, month, day, 12, 0, 0)
+            if (isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
                 return null
             }
             return date
         }
     }
+
+    // 4. Fallback: try parsing with standard Date constructor, but enforce year sanity!
     const parsed = new Date(val)
-    return isNaN(parsed.getTime()) ? null : parsed
+    if (isNaN(parsed.getTime())) return null
+    const y = parsed.getFullYear()
+    if (y < 1900 || y > 2100) {
+        return null
+    }
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12, 0, 0)
 }
 
 export function isValidCPF(cpf: string): boolean {
@@ -230,6 +266,24 @@ export async function processImportItem(itemId: string): Promise<{ success: bool
             genderEnum = "FEMALE"
         }
 
+        // Extract registration (Matrícula) and RG if available in original data
+        let registration: string | null = null
+        let rg: string | null = null
+        if (item.dados_originais) {
+            try {
+                const orig = typeof item.dados_originais === "string" ? JSON.parse(item.dados_originais) : item.dados_originais
+                for (const key of Object.keys(orig)) {
+                    const norm = key.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim()
+                    if ((norm === "matricula" || norm === "registration") && orig[key] != null) {
+                        registration = String(orig[key]).trim()
+                    }
+                    if ((norm === "rg" || norm === "documento" || norm === "identidade") && orig[key] != null) {
+                        rg = String(orig[key]).trim()
+                    }
+                }
+            } catch (e) {}
+        }
+
         // 2. Perform Creation in Transaction
         const newEmployee = await db.$transaction(async (tx) => {
             // Create employee record
@@ -242,6 +296,8 @@ export async function processImportItem(itemId: string): Promise<{ success: bool
                     image: "/avatar-placeholder.jpeg", // Default avatar placeholder for import
                     position: escapeHtml(item.cargo!.trim())!,
                     birthDate: parsedBirthDate!,
+                    registration: registration || null,
+                    rg: rg || null,
                     companyId,
                     costCenterId,
                     

@@ -27,7 +27,8 @@ import {
     Phone,
     MapPin,
     Building2,
-    Clock
+    Clock,
+    RotateCw
 } from "lucide-react"
 
 import { useCompanyStore } from "@/stores/company"
@@ -38,6 +39,7 @@ import {
     getImportDetails,
     uploadImportFile,
     correctImportItem,
+    retryImport,
     getCostCenters
 } from "@/actions/requests"
 
@@ -143,6 +145,7 @@ export function MassCreationContent() {
         costCenterId: ""
     })
 
+    const [retryingId, setRetryingId] = useState<number | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Load initial history
@@ -283,6 +286,45 @@ export function MassCreationContent() {
         }
     }
 
+    async function handleRetryImport(importId: number) {
+        if (!companyId) return
+        try {
+            setRetryingId(importId)
+            await retryImport(importId, companyId)
+            toast.success("Reprocessamento das falhas iniciado!")
+            if (expandedImportId) {
+                await getImportDetails(expandedImportId)
+            }
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao reprocessar falhas")
+        } finally {
+            setRetryingId(null)
+        }
+    }
+
+    // Helper to format raw date for display in correction form
+    function formatRawDate(val: string | null | undefined): string {
+        if (!val) return ""
+        const clean = val.trim()
+        if (/^\d+(\.\d+)?$/.test(clean)) {
+            const num = parseFloat(clean)
+            if (num >= 1000 && num <= 100000) {
+                const date = new Date((num - 25569) * 86400 * 1000)
+                if (!isNaN(date.getTime())) {
+                    const d = String(date.getUTCDate()).padStart(2, "0")
+                    const m = String(date.getUTCMonth() + 1).padStart(2, "0")
+                    const y = date.getUTCFullYear()
+                    return `${d}/${m}/${y}`
+                }
+            }
+        }
+        if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+            const parts = clean.substring(0, 10).split("-")
+            return `${parts[2]}/${parts[1]}/${parts[0]}`
+        }
+        return clean
+    }
+
     // Correction Modal Handlers
     function handleOpenCorrection(item: ImportItemRecord) {
         setCurrentItem(item)
@@ -292,9 +334,9 @@ export function MassCreationContent() {
             cpf: item.cpf || "",
             cargo: item.cargo || "",
             genero: item.genero || "",
-            nascimento: item.nascimento || "",
+            nascimento: formatRawDate(item.nascimento),
             contato: item.contato || "",
-            data_admissao: item.data_admissao || "",
+            data_admissao: formatRawDate(item.data_admissao),
             cep: item.cep || "",
             address: item.address || "",
             number: item.number || "",
@@ -526,6 +568,18 @@ export function MassCreationContent() {
                                                                 <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Lista de Funcionários Encontrados</h5>
                                                                 {importsStore.activeImport?.id === imp.id && (
                                                                     <div className="flex items-center gap-4">
+                                                                        {imp.total_falhas > 0 && (
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => handleRetryImport(imp.id)}
+                                                                                disabled={retryingId === imp.id || hasProgress}
+                                                                                className="h-7 px-2.5 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-none"
+                                                                            >
+                                                                                <RotateCw className={`w-3 h-3 ${retryingId === imp.id ? 'animate-spin' : ''}`} />
+                                                                                Reprocessar {imp.total_falhas} {imp.total_falhas === 1 ? "falha" : "falhas"}
+                                                                            </Button>
+                                                                        )}
                                                                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-bold text-slate-500 hover:text-slate-700">
                                                                             <input
                                                                                 type="checkbox"
