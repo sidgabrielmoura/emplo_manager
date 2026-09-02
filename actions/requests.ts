@@ -1459,6 +1459,66 @@ export async function retryImport(importId: number, companyId: string) {
     }
 }
 
+export async function pauseImport(importId: number, companyId: string) {
+    try {
+        const { data } = await axios.post(
+            `/employees/import/${importId}/pause`,
+            {},
+            { baseURL: base_url }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("pauseImport error:", error)
+        throw error
+    }
+}
+
+export async function resumeImport(importId: number, companyId: string) {
+    try {
+        const { data } = await axios.post(
+            `/employees/import/${importId}/resume`,
+            {},
+            { baseURL: base_url }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("resumeImport error:", error)
+        throw error
+    }
+}
+
+export async function deleteImport(importId: number, companyId: string) {
+    try {
+        const { data } = await axios.delete(
+            `/employees/import/${importId}`,
+            { baseURL: base_url }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("deleteImport error:", error)
+        throw error
+    }
+}
+
+export async function clearImportHistory(companyId: string) {
+    try {
+        const { data } = await axios.post(
+            `/employees/import/clear-history`,
+            { companyId },
+            { baseURL: base_url }
+        )
+        await getImports(companyId)
+        return data
+    } catch (error) {
+        console.error("clearImportHistory error:", error)
+        throw error
+    }
+}
+
+
 export async function getNotificationRecipients(companyId: string) {
     try {
         const { data } = await axios.get(
@@ -1534,6 +1594,34 @@ export async function getEmailLogs(companyId: string) {
         throw error
     }
 }
+
+export async function getNotificationSettings(companyId: string) {
+    try {
+        const { data } = await axios.get(
+            `/settings/notifications/settings?companyId=${companyId}`,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("getNotificationSettings error:", error)
+        throw error
+    }
+}
+
+export async function updateNotificationSettings(companyId: string, notificationIntervalDays: number) {
+    try {
+        const { data } = await axios.put(
+            `/settings/notifications/settings`,
+            { companyId, notificationIntervalDays },
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("updateNotificationSettings error:", error)
+        throw error
+    }
+}
+
 
 
 

@@ -415,7 +415,7 @@ export async function processImportItem(itemId: string): Promise<{ success: bool
 }
 
 // Function to calculate and update statistics for an import
-export async function updateImportStats(importId: number) {
+export async function updateImportStats(importId: number, forcedStatus?: "PAUSED" | "CANCELLED") {
     try {
         const items = await db.importItem.findMany({
             where: { importacao_id: importId }
@@ -426,26 +426,31 @@ export async function updateImportStats(importId: number) {
         const totalCriados = items.filter(i => i.status === "COMPLETED").length
         const totalFalhas = items.filter(i => i.status === "FAILED").length
 
-        const status = totalProcessados === totalEncontrados
-            ? (totalFalhas > 0 ? "COMPLETED_WITH_ERRORS" : "COMPLETED")
-            : "PROCESSING"
+        const currentImp = await db.import.findUnique({ where: { id: importId } })
+        if (!currentImp) return
 
-        const finalizadoEm = totalProcessados === totalEncontrados ? new Date() : null
+        let status = currentImp.status
+        if (forcedStatus) {
+            status = forcedStatus
+        } else if (totalProcessados === totalEncontrados && totalEncontrados > 0) {
+            status = totalFalhas > 0 ? "COMPLETED_WITH_ERRORS" : "COMPLETED"
+        } else if (status !== "PAUSED" && status !== "CANCELLED" && status !== "FAILED") {
+            status = "PROCESSING"
+        }
 
-        let tempoExecucao: string | null = null
-        if (finalizadoEm) {
-            const imp = await db.import.findUnique({ where: { id: importId } })
-            if (imp) {
-                const diffMs = finalizadoEm.getTime() - imp.iniciado_em.getTime()
-                const diffSecs = Math.floor(diffMs / 1000)
-                if (diffSecs < 60) {
-                    tempoExecucao = `${diffSecs}s`
-                } else {
-                    const mins = Math.floor(diffSecs / 60)
-                    const secs = diffSecs % 60
-                    tempoExecucao = `${mins}m${secs}s`
-                }
-            }
+        const isFinished = status === "COMPLETED" || status === "COMPLETED_WITH_ERRORS" || status === "FAILED"
+        const finalizadoEm = isFinished ? new Date() : currentImp.finalizado_em
+
+        let tempoExecucao = currentImp.tempo_execucao
+        const now = new Date()
+        const diffMs = (finalizadoEm ? finalizadoEm.getTime() : now.getTime()) - currentImp.iniciado_em.getTime()
+        const diffSecs = Math.max(0, Math.floor(diffMs / 1000))
+        if (diffSecs < 60) {
+            tempoExecucao = `${diffSecs}s`
+        } else {
+            const mins = Math.floor(diffSecs / 60)
+            const secs = diffSecs % 60
+            tempoExecucao = `${mins}m${secs}s`
         }
 
         await db.import.update({
@@ -465,10 +470,21 @@ export async function updateImportStats(importId: number) {
     }
 }
 
+const MAX_PROCESSING_TIME_MS = 5 * 60 * 1000; // 5 minutes strict processing window
+
 // Function to process the entire queue in the background
 export async function processImportQueue(importId: number) {
+    const queueStartTime = Date.now();
     try {
-        // Fetch all pending items
+        const currentImp = await db.import.findUnique({
+            where: { id: importId }
+        })
+
+        if (!currentImp || currentImp.status === "PAUSED" || currentImp.status === "CANCELLED") {
+            return
+        }
+
+        // Fetch all pending items ordered by row
         const pendingItems = await db.importItem.findMany({
             where: {
                 importacao_id: importId,
@@ -479,18 +495,66 @@ export async function processImportQueue(importId: number) {
             }
         })
 
-        // Update import status to PROCESSING if it is PENDING
+        if (pendingItems.length === 0) {
+            await updateImportStats(importId)
+            return
+        }
+
+        // Update import status to PROCESSING
         await db.import.update({
             where: { id: importId },
             data: { status: "PROCESSING" }
         })
 
-        // Process sequentially to avoid lock issues and manage stats correctly
+        // Process sequentially to avoid lock issues and manage stats accurately
         for (const item of pendingItems) {
-            await processImportItem(item.id)
+            // 1. Check if user paused or cancelled the import
+            const checkStatus = await db.import.findUnique({
+                where: { id: importId },
+                select: { status: true }
+            })
+
+            if (checkStatus?.status === "PAUSED") {
+                console.log(`[Import #${importId}] Paused by user before item ${item.id}`)
+                await updateImportStats(importId, "PAUSED")
+                return
+            }
+
+            if (checkStatus?.status === "CANCELLED") {
+                console.log(`[Import #${importId}] Cancelled by user before item ${item.id}`)
+                await updateImportStats(importId, "CANCELLED")
+                return
+            }
+
+            // 2. Check 5-minute timeout window
+            const elapsedMs = Date.now() - queueStartTime
+            if (elapsedMs >= MAX_PROCESSING_TIME_MS) {
+                console.warn(`[Import #${importId}] Reached 5-minute processing limit. Safely pausing remaining queue.`)
+                await db.import.update({
+                    where: { id: importId },
+                    data: { status: "PAUSED" }
+                })
+                await updateImportStats(importId, "PAUSED")
+                return
+            }
+
+            // 3. Process the item with safe fallback
+            try {
+                await processImportItem(item.id)
+            } catch (itemErr: any) {
+                console.error(`Error processing item ${item.id}:`, itemErr)
+                await db.importItem.update({
+                    where: { id: item.id },
+                    data: {
+                        status: "FAILED",
+                        erro: itemErr?.message || "Erro inesperado ao processar linha"
+                    }
+                }).catch(console.error)
+                await updateImportStats(importId)
+            }
         }
 
-        // Final update to stats when finished
+        // Final update to stats when run completes
         await updateImportStats(importId)
 
         // Fetch completed import details and notify creator
@@ -499,7 +563,7 @@ export async function processImportQueue(importId: number) {
                 where: { id: importId }
             })
 
-            if (finishedImport) {
+            if (finishedImport && (finishedImport.status === "COMPLETED" || finishedImport.status === "COMPLETED_WITH_ERRORS")) {
                 let creatorEmail: string | null = null
                 let creatorName: string = "Administrador"
 
@@ -546,3 +610,22 @@ export async function processImportQueue(importId: number) {
         }).catch(console.error)
     }
 }
+
+export async function pauseImportQueue(importId: number) {
+    await db.import.update({
+        where: { id: importId },
+        data: { status: "PAUSED" }
+    })
+    await updateImportStats(importId, "PAUSED")
+}
+
+export async function resumeImportQueue(importId: number) {
+    await db.import.update({
+        where: { id: importId },
+        data: { status: "PROCESSING" }
+    })
+    processImportQueue(importId).catch(err => {
+        console.error(`Error resuming import queue #${importId}:`, err)
+    })
+}
+

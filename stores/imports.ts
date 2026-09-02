@@ -4,7 +4,7 @@ export interface ImportRecord {
     id: number
     companyId: string
     arquivo: string
-    status: "PENDING" | "PROCESSING" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED" | "CANCELLED"
+    status: "PENDING" | "PROCESSING" | "PAUSED" | "COMPLETED" | "COMPLETED_WITH_ERRORS" | "FAILED" | "CANCELLED"
     iniciado_em: string
     finalizado_em?: string | null
     total_encontrados: number

@@ -11,7 +11,7 @@ type CompanyDashboardDTO = {
   totalDocuments: number
 }
 
-type companyInterface = Prisma.CompanyGetPayload<{ select: { name: true, imageUrl: true, id: true, cnpj: true, email: true, phone: true, address: true, state: true, city: true, responsible: true } }>
+type companyInterface = Prisma.CompanyGetPayload<{ select: { name: true, imageUrl: true, id: true, cnpj: true, email: true, phone: true, address: true, state: true, city: true, responsible: true, notificationIntervalDays: true } }>
 
 export const useCompanyStore = proxy({
   companies: [] as CompanyDashboardDTO[],

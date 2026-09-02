@@ -1,214 +1,189 @@
 import db from "@/lib/prisma";
-import { addDays, startOfDay, endOfDay, format } from "date-fns";
+import { addDays, startOfDay, format } from "date-fns";
 import { EmailService } from "./service";
 import { ptBR } from "date-fns/locale";
 
 export async function checkAndSendExpirationAlerts() {
-    const intervals = [0, 3, 10, 30];
     const today = startOfDay(new Date());
+    let totalEmailsSent = 0;
+    let totalAlertsGenerated = 0;
 
-    for (const days of intervals) {
-        const targetDate = addDays(today, days);
-        const startDate = startOfDay(targetDate);
-        const endDate = endOfDay(targetDate);
-
-        // 1. Employee Documents
-        const expiringDocuments = await db.document.findMany({
-            where: {
-                expiresAt: {
-                    gte: startDate,
-                    lte: endDate,
+    // 1. Fetch all active companies with their registered notification recipients
+    const activeCompanies = await db.company.findMany({
+        where: {
+            status: "ACTIVE",
+            deletedAt: null,
+        },
+        include: {
+            notificationRecipients: {
+                where: {
+                    documentExpirationAlerts: true,
                 },
-                status: { not: "EXPIRED" },
-                isEnabled: true,
-                deletedAt: null,
-                employee: {
-                    status: "ACTIVE",
-                    dismissedAt: null,
-                    company: {
+            },
+        },
+    });
+
+    for (const company of activeCompanies) {
+        if (!company.notificationRecipients || company.notificationRecipients.length === 0) {
+            continue;
+        }
+
+        // Determine the configured notification interval (defaulting to 10 if not set, valid values: 5, 10, 15)
+        const interval = [5, 10, 15].includes(company.notificationIntervalDays)
+            ? company.notificationIntervalDays
+            : 10;
+
+        // Build intervals: 0 (today) + step multiples up to 30 days
+        const intervals: number[] = [0];
+        for (let d = interval; d <= 30; d += interval) {
+            intervals.push(d);
+        }
+
+        for (const days of intervals) {
+            const targetDate = addDays(today, days);
+            
+            // Generate full UTC day window for Prisma @db.Date field matching
+            const startDate = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0, 0));
+            const endDate = new Date(Date.UTC(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999));
+
+            // 1. Employee Documents for this company
+            const expiringDocuments = await db.document.findMany({
+                where: {
+                    expiresAt: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    status: { not: "EXPIRED" },
+                    isEnabled: true,
+                    deletedAt: null,
+                    employee: {
+                        companyId: company.id,
                         status: "ACTIVE",
-                        deletedAt: null,
+                        dismissedAt: null,
                     },
                 },
-            },
-            include: {
-                employee: {
-                    include: {
-                        company: {
-                            include: {
-                                notificationRecipients: {
-                                    where: {
-                                        documentExpirationAlerts: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
+                include: {
+                    employee: true,
                 },
-            },
-        });
+            });
 
-        // 2. Employee Trainings
-        const expiringTrainings = await db.training.findMany({
-            where: {
-                expiresAt: {
-                    gte: startDate,
-                    lte: endDate,
-                },
-                status: { not: "EXPIRED" },
-                isEnabled: true,
-                deletedAt: null,
-                employee: {
-                    status: "ACTIVE",
-                    dismissedAt: null,
-                    company: {
+            // 2. Employee Trainings for this company
+            const expiringTrainings = await db.training.findMany({
+                where: {
+                    expiresAt: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    status: { not: "EXPIRED" },
+                    isEnabled: true,
+                    deletedAt: null,
+                    employee: {
+                        companyId: company.id,
                         status: "ACTIVE",
-                        deletedAt: null,
+                        dismissedAt: null,
                     },
                 },
-            },
-            include: {
-                employee: {
-                    include: {
-                        company: {
-                            include: {
-                                notificationRecipients: {
-                                    where: {
-                                        documentExpirationAlerts: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
+                include: {
+                    employee: true,
                 },
-            },
-        });
+            });
 
-        // 3. Company Documents
-        const expiringCompanyDocs = await db.companyDocument.findMany({
-            where: {
-                expiresAt: {
-                    gte: startDate,
-                    lte: endDate,
-                },
-                status: { not: "EXPIRED" },
-                deletedAt: null,
-                company: {
-                    status: "ACTIVE",
+            // 3. Company Documents for this company
+            const expiringCompanyDocs = await db.companyDocument.findMany({
+                where: {
+                    companyId: company.id,
+                    expiresAt: {
+                        gte: startDate,
+                        lte: endDate,
+                    },
+                    status: { not: "EXPIRED" },
                     deletedAt: null,
                 },
-            },
-            include: {
-                company: {
-                    include: {
-                        notificationRecipients: {
-                            where: {
-                                documentExpirationAlerts: true,
-                            },
-                        },
-                    },
-                },
-            },
-        });
+            });
 
-        const recipientNotifications = new Map<string, {
-            email: string;
-            name: string;
-            items: { employeeName: string; documentType: string; expiresAt: string }[];
-            companyId?: string;
-        }>();
+            if (
+                expiringDocuments.length === 0 &&
+                expiringTrainings.length === 0 &&
+                expiringCompanyDocs.length === 0
+            ) {
+                continue;
+            }
 
-        const addItemToRecipient = (
-            email: string,
-            name: string,
-            companyId: string | undefined,
-            itemData: { employeeName: string; documentType: string; expiresAt: string }
-        ) => {
-            const normalizedEmail = email.trim().toLowerCase();
-            if (!normalizedEmail) return;
+            // Build items list
+            const rawItems: { employeeName: string; documentType: string; expiresAt: string }[] = [];
 
-            if (!recipientNotifications.has(normalizedEmail)) {
-                recipientNotifications.set(normalizedEmail, {
-                    email: normalizedEmail,
-                    name: name || "Gestor",
-                    items: [],
-                    companyId,
+            for (const doc of expiringDocuments) {
+                const docLabel = doc.name || doc.type || "Documento";
+                const formattedDate = doc.expiresAt
+                    ? format(doc.expiresAt, "dd/MM/yyyy", { locale: ptBR })
+                    : "Data não informada";
+                rawItems.push({
+                    employeeName: doc.employee?.name || "Funcionário",
+                    documentType: docLabel,
+                    expiresAt: formattedDate,
                 });
             }
 
-            const recipientObj = recipientNotifications.get(normalizedEmail)!;
-            // Prevent duplicate item entries in the same email
-            const exists = recipientObj.items.some(
-                i => i.employeeName === itemData.employeeName &&
-                     i.documentType === itemData.documentType &&
-                     i.expiresAt === itemData.expiresAt
+            for (const training of expiringTrainings) {
+                const trainingLabel = training.name || training.type || "Treinamento";
+                const formattedDate = training.expiresAt
+                    ? format(training.expiresAt, "dd/MM/yyyy", { locale: ptBR })
+                    : "Data não informada";
+                rawItems.push({
+                    employeeName: training.employee?.name || "Funcionário",
+                    documentType: trainingLabel,
+                    expiresAt: formattedDate,
+                });
+            }
+
+            for (const compDoc of expiringCompanyDocs) {
+                const compDocLabel = compDoc.name || compDoc.type || "Documento da Empresa";
+                const formattedDate = compDoc.expiresAt
+                    ? format(compDoc.expiresAt, "dd/MM/yyyy", { locale: ptBR })
+                    : "Data não informada";
+                rawItems.push({
+                    employeeName: `Documento da Empresa (${company.name})`,
+                    documentType: compDocLabel,
+                    expiresAt: formattedDate,
+                });
+            }
+
+            // Deduplicate items
+            const items = rawItems.filter((item, index, self) =>
+                index === self.findIndex((i) =>
+                    i.employeeName === item.employeeName &&
+                    i.documentType === item.documentType &&
+                    i.expiresAt === item.expiresAt
+                )
             );
 
-            if (!exists) {
-                recipientObj.items.push(itemData);
-            }
-        };
+            if (items.length === 0) continue;
 
-        const processEmployeeItem = (item: any, type: 'document' | 'training') => {
-            if (!item.employee) return;
+            totalAlertsGenerated += items.length;
 
-            const itemsLabel = item.name || item.type;
-            const formattedDate = item.expiresAt ? format(item.expiresAt, "dd/MM/yyyy", { locale: ptBR }) : "Data não informada";
-            const employeeName = item.employee.name || "Funcionário";
-            const company = item.employee.company;
-            const companyId = item.employee.companyId || company?.id;
+            // Dispatch alert emails to all company recipients configured for expiration alerts
+            for (const recipient of company.notificationRecipients) {
+                const normalizedEmail = recipient.email.trim().toLowerCase();
+                if (!normalizedEmail) continue;
 
-            const itemData = {
-                employeeName,
-                documentType: itemsLabel,
-                expiresAt: formattedDate,
-            };
-
-            // Send exclusively to company custom notification recipients
-            if (company?.notificationRecipients) {
-                company.notificationRecipients.forEach((rec: any) => {
-                    addItemToRecipient(rec.email, rec.name, companyId, itemData);
-                });
-            }
-        };
-
-        const processCompanyDocItem = (item: any) => {
-            if (!item.company) return;
-
-            const itemsLabel = item.name || item.type;
-            const formattedDate = item.expiresAt ? format(item.expiresAt, "dd/MM/yyyy", { locale: ptBR }) : "Data não informada";
-            const company = item.company;
-            const companyId = company.id;
-
-            const itemData = {
-                employeeName: `Documento da Empresa (${company.name})`,
-                documentType: itemsLabel,
-                expiresAt: formattedDate,
-            };
-
-            // Send exclusively to company custom notification recipients
-            if (company.notificationRecipients) {
-                company.notificationRecipients.forEach((rec: any) => {
-                    addItemToRecipient(rec.email, rec.name, companyId, itemData);
-                });
-            }
-        };
-
-        expiringDocuments.forEach(doc => processEmployeeItem(doc, 'document'));
-        expiringTrainings.forEach(training => processEmployeeItem(training, 'training'));
-        expiringCompanyDocs.forEach(compDoc => processCompanyDocItem(compDoc));
-
-        // Dispatch alerts exclusively to recipients with expiring items
-        for (const notification of recipientNotifications.values()) {
-            if (notification.items.length > 0) {
                 await EmailService.sendExpirationAlert({
-                    to: notification.email,
-                    adminName: notification.name,
+                    to: normalizedEmail,
+                    recipientName: recipient.name,
+                    adminName: recipient.name || "Gestor",
                     days,
-                    expiringItems: notification.items,
-                    companyId: notification.companyId,
+                    expiringItems: items,
+                    companyId: company.id,
                 });
+
+                totalEmailsSent++;
             }
         }
     }
+
+    return {
+        success: true,
+        companiesProcessed: activeCompanies.length,
+        totalAlertsGenerated,
+        totalEmailsSent,
+    };
 }

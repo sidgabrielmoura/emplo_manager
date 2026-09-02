@@ -51,9 +51,16 @@ export async function POST(req: NextRequest) {
             })
             if (adminUser) {
                 targets.push({ email: adminUser.email, name: adminUser.name })
+            } else {
+                const superAdminUser = await db.superadmin.findUnique({
+                    where: { id: userId }
+                })
+                if (superAdminUser) {
+                    targets.push({ email: superAdminUser.email, name: superAdminUser.name })
+                }
             }
 
-            const uniqueTargets = Array.from(new Map(targets.map(t => [t.email, t])).values())
+            const uniqueTargets = Array.from(new Map(targets.map(t => [t.email.toLowerCase(), t])).values())
 
             for (const target of uniqueTargets) {
                 await EmailService.sendPassportEmissionNotification({

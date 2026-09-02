@@ -18,16 +18,16 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, companyId)
         if (!hasAccess) return forbiddenResponse()
 
-        // Self-healing: mark stale imports (stuck for > 1 hour) as FAILED
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+        // Self-healing: mark stale imports (stuck for > 5 minutes) as PAUSED so users can resume them
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
         await db.import.updateMany({
             where: {
                 companyId,
-                status: { in: ["PENDING", "PROCESSING"] },
-                iniciado_em: { lt: oneHourAgo }
+                status: "PROCESSING",
+                iniciado_em: { lt: fiveMinutesAgo }
             },
             data: {
-                status: "FAILED"
+                status: "PAUSED"
             }
         }).catch(err => console.error("Self-healing import cleanup error:", err))
 

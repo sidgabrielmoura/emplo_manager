@@ -190,6 +190,7 @@ model Company {
   imports                  Import[]
   notificationRecipients   NotificationRecipient[]
   spyAccesses              SpyAccess[]
+  notificationIntervalDays Int                       @default(10)
 }
 
 model Employee {
@@ -396,6 +397,7 @@ model CostCenter {
 enum ImportStatus {
   PENDING
   PROCESSING
+  PAUSED
   COMPLETED
   COMPLETED_WITH_ERRORS
   FAILED

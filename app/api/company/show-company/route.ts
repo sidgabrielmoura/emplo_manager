@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
                 disabledDocuments: true,
                 standardDocumentValidity: true,
                 standardDocumentLabels: true,
+                notificationIntervalDays: true,
                 createdAt: true
             }
         })

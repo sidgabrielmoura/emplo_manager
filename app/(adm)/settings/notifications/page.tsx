@@ -19,7 +19,12 @@ import {
   Calendar,
   Eye,
   AlertCircle,
-  Settings
+  Settings,
+  Clock,
+  Check,
+  CalendarClock,
+  Sparkles,
+  ShieldCheck
 } from "lucide-react"
 import {
   Card,
@@ -46,7 +51,9 @@ import {
   createNotificationRecipient,
   deleteNotificationRecipient,
   updateNotificationRecipient,
-  getEmailLogs
+  getEmailLogs,
+  getNotificationSettings,
+  updateNotificationSettings
 } from "@/actions/requests"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -70,6 +77,30 @@ interface EmailLog {
   sentAt: string
 }
 
+const FREQUENCY_OPTIONS = [
+  {
+    value: 5,
+    label: "A cada 5 dias",
+    badge: "Frequência Alta",
+    badgeColor: "bg-amber-100 text-amber-700 border-amber-200",
+    description: "Alertas disparados a cada 5 dias de antecedência até o vencimento (30, 25, 20, 15, 10, 5 e 0 dias)."
+  },
+  {
+    value: 10,
+    label: "A cada 10 dias",
+    badge: "Recomendado",
+    badgeColor: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    description: "Equilíbrio padrão ideal de avisos (30, 20, 10 e 0 dias) evitando excesso de notificações."
+  },
+  {
+    value: 15,
+    label: "A cada 15 dias",
+    badge: "Quinzenal",
+    badgeColor: "bg-blue-100 text-blue-700 border-blue-200",
+    description: "Alertas quinzenais (30, 15 e 0 dias) para quem prefere resumos mais consolidados."
+  }
+]
+
 export default function NotificationsPage() {
   const companyStore = useSnapshot(useCompanyStore)
   const companyId = companyStore.company_selected?.id || ""
@@ -77,8 +108,11 @@ export default function NotificationsPage() {
   // State Management
   const [recipients, setRecipients] = useState<Recipient[]>([])
   const [logs, setLogs] = useState<EmailLog[]>([])
+  const [intervalDays, setIntervalDays] = useState<number>(10)
   const [loadingRecipients, setLoadingRecipients] = useState(false)
   const [loadingLogs, setLoadingLogs] = useState(false)
+  const [loadingInterval, setLoadingInterval] = useState(false)
+  const [savingInterval, setSavingInterval] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
   // Form State
@@ -119,14 +153,45 @@ export default function NotificationsPage() {
     }
   }
 
+  const loadInterval = async () => {
+    if (!companyId) return
+    try {
+      setLoadingInterval(true)
+      const data = await getNotificationSettings(companyId)
+      if (data?.notificationIntervalDays) {
+        setIntervalDays(Number(data.notificationIntervalDays))
+      }
+    } catch (err) {
+      console.error("Erro ao carregar frequência de envio:", err)
+    } finally {
+      setLoadingInterval(false)
+    }
+  }
+
   useEffect(() => {
     if (companyId) {
       loadRecipients()
       loadLogs()
+      loadInterval()
     }
   }, [companyId])
 
   // Handlers
+  const handleSelectInterval = async (val: number) => {
+    if (savingInterval || val === intervalDays) return
+    try {
+      setSavingInterval(true)
+      setIntervalDays(val)
+      await updateNotificationSettings(companyId, val)
+      toast.success(`Frequência de envio atualizada para a cada ${val} dias!`)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Erro ao atualizar período de envio")
+      loadInterval() // rollback
+    } finally {
+      setSavingInterval(false)
+    }
+  }
+
   const handleAddRecipient = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !email.trim()) {
@@ -216,8 +281,83 @@ export default function NotificationsPage() {
             </Link>
             <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">Central de Notificações</h1>
           </div>
-          <p className="text-muted-foreground mt-1">Gerencie a equipe que recebe alertas e audite o histórico de e-mails enviados.</p>
+          <p className="text-muted-foreground mt-1">Gerencie a frequência dos alertas, equipe de destinatários e histórico de e-mails enviados.</p>
         </div>
+
+        {/* Global Sending Frequency Section */}
+        <Card className="border border-slate-100 bg-gradient-to-br from-white to-slate-50/60 shadow-sm overflow-hidden">
+          <CardHeader className="pb-3 border-b border-slate-100/80 bg-white/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                    <CalendarClock className="w-4 h-4" />
+                  </div>
+                  <CardTitle className="text-sm font-bold text-slate-900">
+                    Período de Envio dos Alertas de Vencimento
+                  </CardTitle>
+                </div>
+                <CardDescription className="text-xs text-slate-500">
+                  Configure com que frequência os e-mails de aviso de vencimento (ASO, treinamentos e documentos) serão disparados para a sua equipe.
+                </CardDescription>
+              </div>
+              {savingInterval && (
+                <div className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100 animate-pulse">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Salvando período...
+                </div>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="p-5">
+            {loadingInterval ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 text-emerald-600 animate-spin mr-2" />
+                <span className="text-xs text-slate-500 font-medium">Carregando período configurado...</span>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-3 gap-3.5">
+                {FREQUENCY_OPTIONS.map((opt) => {
+                  const isSelected = intervalDays === opt.value
+                  return (
+                    <div
+                      key={opt.value}
+                      onClick={() => handleSelectInterval(opt.value)}
+                      className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer flex flex-col justify-between select-none ${
+                        isSelected
+                          ? "bg-white border-blue-500 shadow-md shadow-blue-500/10 ring-2 ring-blue-500/20"
+                          : "bg-white/80 border-slate-200/80 hover:border-slate-300 hover:bg-white hover:shadow-sm"
+                      }`}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-black text-slate-900">{opt.label}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${opt.badgeColor}`}>
+                            {opt.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                          {opt.description}
+                        </p>
+                      </div>
+
+                      <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-slate-400">
+                          {isSelected ? "Frequência ativa" : "Clique para selecionar"}
+                        </span>
+                        <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${
+                          isSelected ? "bg-blue-600 text-white" : "border border-slate-300 bg-slate-50"
+                        }`}>
+                          {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Tabs System */}
         <Tabs defaultValue="recipients" className="w-full">

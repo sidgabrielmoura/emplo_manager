@@ -28,7 +28,10 @@ import {
     MapPin,
     Building2,
     Clock,
-    RotateCw
+    RotateCw,
+    Pause,
+    Play,
+    AlertOctagon
 } from "lucide-react"
 
 import { useCompanyStore } from "@/stores/company"
@@ -40,6 +43,10 @@ import {
     uploadImportFile,
     correctImportItem,
     retryImport,
+    pauseImport,
+    resumeImport,
+    deleteImport,
+    clearImportHistory,
     getCostCenters
 } from "@/actions/requests"
 
@@ -71,6 +78,13 @@ function ImportStatusBadge({ status }: { status: string }) {
                 <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 font-semibold flex items-center gap-1.5">
                     <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
                     Processando
+                </Badge>
+            )
+        case "PAUSED":
+            return (
+                <Badge variant="outline" className="bg-amber-50 text-amber-800 border-amber-300 font-semibold flex items-center gap-1.5">
+                    <Pause className="w-3 h-3 text-amber-600" />
+                    Pausado
                 </Badge>
             )
         case "COMPLETED":
@@ -124,6 +138,17 @@ export function MassCreationContent() {
     const [expandedImportId, setExpandedImportId] = useState<number | null>(null)
     const [showOnlyErrors, setShowOnlyErrors] = useState(false)
 
+    // Action Loading States
+    const [retryingId, setRetryingId] = useState<number | null>(null)
+    const [pausingId, setPausingId] = useState<number | null>(null)
+    const [resumingId, setResumingId] = useState<number | null>(null)
+    const [deletingId, setDeletingId] = useState<number | null>(null)
+
+    // Delete Modals States
+    const [importToDelete, setImportToDelete] = useState<{ id: number; arquivo: string } | null>(null)
+    const [isClearHistoryOpen, setIsClearHistoryOpen] = useState(false)
+    const [isClearingHistory, setIsClearingHistory] = useState(false)
+
     // Correction Modal States
     const [isCorrectOpen, setIsCorrectOpen] = useState(false)
     const [currentItem, setCurrentItem] = useState<ImportItemRecord | null>(null)
@@ -145,7 +170,6 @@ export function MassCreationContent() {
         costCenterId: ""
     })
 
-    const [retryingId, setRetryingId] = useState<number | null>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
     // Load initial history
@@ -302,6 +326,70 @@ export function MassCreationContent() {
         }
     }
 
+    async function handlePauseImport(importId: number) {
+        if (!companyId) return
+        try {
+            setPausingId(importId)
+            await pauseImport(importId, companyId)
+            toast.success("Processamento pausado com sucesso! O ponto exato foi preservado.")
+            if (expandedImportId) {
+                await getImportDetails(expandedImportId)
+            }
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao pausar processamento")
+        } finally {
+            setPausingId(null)
+        }
+    }
+
+    async function handleResumeImport(importId: number) {
+        if (!companyId) return
+        try {
+            setResumingId(importId)
+            await resumeImport(importId, companyId)
+            toast.success("Processamento retomado a partir do ponto onde parou!")
+            if (expandedImportId) {
+                await getImportDetails(expandedImportId)
+            }
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao retomar processamento")
+        } finally {
+            setResumingId(null)
+        }
+    }
+
+    async function handleConfirmDeleteSingle() {
+        if (!importToDelete || !companyId) return
+        try {
+            setDeletingId(importToDelete.id)
+            await deleteImport(importToDelete.id, companyId)
+            toast.success(`Importação #${importToDelete.id} excluída do histórico!`)
+            if (expandedImportId === importToDelete.id) {
+                setExpandedImportId(null)
+            }
+            setImportToDelete(null)
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao excluir importação")
+        } finally {
+            setDeletingId(null)
+        }
+    }
+
+    async function handleConfirmClearHistory() {
+        if (!companyId) return
+        try {
+            setIsClearingHistory(true)
+            await clearImportHistory(companyId)
+            toast.success("Todo o histórico de importações foi limpo com sucesso!")
+            setExpandedImportId(null)
+            setIsClearHistoryOpen(false)
+        } catch (error: any) {
+            toast.error(error?.response?.data?.error || "Erro ao limpar histórico de importações")
+        } finally {
+            setIsClearingHistory(false)
+        }
+    }
+
     // Helper to format raw date for display in correction form
     function formatRawDate(val: string | null | undefined): string {
         if (!val) return ""
@@ -408,36 +496,50 @@ export function MassCreationContent() {
                 if (errorText.includes("data de admissão inválida")) return "Data de admissão inválida"
                 if (errorText.includes("data de admissão é obrigatória")) return "Data de admissão é obrigatória"
                 return null
-            case "costCenterId":
-                return errorText.includes("centro de custo") ? "Centro de Custo não encontrado" : null
             default:
                 return null
         }
     }
 
     return (
-        <main className="mx-auto flex flex-col gap-6 lg:gap-8 pb-10">
-            {/* Header */}
-            <header className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <Link href="/employees">
-                        <Button variant="outline" size="icon" className="size-10 rounded-xl cursor-pointer">
-                            <ChevronLeft className="w-5 h-5" />
-                        </Button>
-                    </Link>
-                    <div>
-                        <h1 className="text-xl lg:text-2xl font-black text-slate-900 tracking-tight">Criação em Massa</h1>
-                        <p className="text-muted-foreground text-xs lg:text-sm font-medium">
-                            Importe múltiplos colaboradores usando planilhas Excel ou CSV.
-                        </p>
-                    </div>
+        <main className="space-y-6">
+            {/* Top Navigation / Breadcrumb */}
+            <div className="flex items-center gap-2">
+                <Link
+                    href="/employees"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                    <ChevronLeft className="w-4 h-4" />
+                    Voltar para Funcionários
+                </Link>
+            </div>
+
+            {/* Header Section */}
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <h1 className="text-2xl lg:text-3xl font-black text-slate-900 tracking-tight">
+                        Criação em Massa de Funcionários
+                    </h1>
+                    <p className="text-xs text-muted-foreground">
+                        Importe múltiplos funcionários de uma só vez através de planilhas Excel ou CSV estruturadas.
+                    </p>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-3">
+                    <a
+                        href="/api/employees/import/template"
+                        download="modelo_importacao_funcionarios.xlsx"
+                        className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-sm transition-all"
+                    >
+                        <Download className="w-4 h-4 text-slate-500" />
+                        Baixar Modelo
+                    </a>
+
                     <Button
                         onClick={() => setIsUploadOpen(true)}
-                        className="cursor-pointer text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold h-10 px-4 text-sm shadow-md"
+                        className="text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold text-xs h-9 px-4 shadow-sm cursor-pointer"
                     >
+                        <Upload className="w-4 h-4 mr-1.5" />
                         Nova Importação
                     </Button>
                 </div>
@@ -446,11 +548,26 @@ export function MassCreationContent() {
             <Separator />
 
             <Card className="rounded-3xl p-0 border-slate-100 shadow-sm bg-white overflow-hidden">
-                <CardHeader className="p-6 pb-2">
-                    <CardTitle className="text-base font-bold text-slate-800">Histórico de Importações</CardTitle>
-                    <CardDescription className="text-xs">
-                        Veja o progresso e o status de todos os lotes de importação executados.
-                    </CardDescription>
+                <CardHeader className="p-6 pb-4 border-b border-slate-50">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <CardTitle className="text-base font-bold text-slate-800">Histórico de Importações</CardTitle>
+                            <CardDescription className="text-xs">
+                                Veja o progresso, controle a execução (pausa/retomada) e audite os lotes processados (tempo limite de 5 minutos por execução).
+                            </CardDescription>
+                        </div>
+                        {importsStore.imports && importsStore.imports.length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setIsClearHistoryOpen(true)}
+                                className="h-8 px-3 text-xs font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-xl flex items-center gap-1.5 cursor-pointer shrink-0"
+                            >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Limpar Histórico
+                            </Button>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent className="p-0">
                     {importsStore.loading && !importsStore.imports ? (
@@ -488,7 +605,9 @@ export function MassCreationContent() {
                                 <tbody>
                                     {importsStore.imports.map((imp) => {
                                         const isExpanded = expandedImportId === imp.id
-                                        const hasProgress = imp.status === "PROCESSING" || imp.status === "PENDING"
+                                        const isProcessing = imp.status === "PROCESSING"
+                                        const isPaused = imp.status === "PAUSED"
+                                        const hasProgress = isProcessing || imp.status === "PENDING"
                                         const progressPercent = imp.total_encontrados > 0
                                             ? Math.round((imp.total_processados / imp.total_encontrados) * 100)
                                             : 0
@@ -511,9 +630,9 @@ export function MassCreationContent() {
                                                     </td>
                                                     <td className="py-4 px-4 text-slate-500 font-medium text-xs hidden md:table-cell">
                                                         {new Date(imp.iniciado_em).toLocaleTimeString("pt-BR", {
-                                                            hour: "2-digit",
-                                                            minute: "2-digit",
-                                                            second: "2-digit"
+                                                             hour: "2-digit",
+                                                             minute: "2-digit",
+                                                             second: "2-digit"
                                                         })}
                                                     </td>
                                                     <td className="py-4 px-4 text-center font-bold text-slate-600 text-xs">
@@ -529,18 +648,62 @@ export function MassCreationContent() {
                                                         {imp.tempo_execucao || (hasProgress ? "-" : "0s")}
                                                     </td>
                                                     <td className="py-4 px-4 text-right">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleExpandRow(imp.id)}
-                                                            className="h-8 w-8 p-0 rounded-lg cursor-pointer"
-                                                        >
-                                                            {isExpanded ? (
-                                                                <ChevronUp className="w-4 h-4 text-slate-500" />
-                                                            ) : (
-                                                                <ChevronDown className="w-4 h-4 text-slate-500" />
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            {/* Pause / Resume Controls */}
+                                                            {isProcessing && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handlePauseImport(imp.id)}
+                                                                    disabled={pausingId === imp.id}
+                                                                    className="h-7 px-2 text-[10px] font-bold text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg flex items-center gap-1 cursor-pointer"
+                                                                    title="Pausar processamento"
+                                                                >
+                                                                    {pausingId === imp.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Pause className="w-3 h-3" />}
+                                                                    <span className="hidden sm:inline">Pausar</span>
+                                                                </Button>
                                                             )}
-                                                        </Button>
+
+                                                            {isPaused && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleResumeImport(imp.id)}
+                                                                    disabled={resumingId === imp.id}
+                                                                    className="h-7 px-2 text-[10px] font-bold text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-lg flex items-center gap-1 cursor-pointer"
+                                                                    title="Continuar processamento"
+                                                                >
+                                                                    {resumingId === imp.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3 fill-emerald-600" />}
+                                                                    <span className="hidden sm:inline">Continuar</span>
+                                                                </Button>
+                                                            )}
+
+                                                            {/* Delete Individual Import Button */}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => setImportToDelete({ id: imp.id, arquivo: imp.arquivo })}
+                                                                disabled={isProcessing}
+                                                                className="h-7 w-7 p-0 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                                                                title="Excluir importação do histórico"
+                                                            >
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            </Button>
+
+                                                            {/* Expand Button */}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleExpandRow(imp.id)}
+                                                                className="h-7 w-7 p-0 rounded-lg cursor-pointer"
+                                                            >
+                                                                {isExpanded ? (
+                                                                    <ChevronUp className="w-4 h-4 text-slate-500" />
+                                                                ) : (
+                                                                    <ChevronDown className="w-4 h-4 text-slate-500" />
+                                                                )}
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
 
@@ -549,14 +712,21 @@ export function MassCreationContent() {
                                                     <tr className="bg-slate-50/20 border-b border-slate-100">
                                                         <td colSpan={9} className="p-4 lg:p-6 bg-slate-50/30">
                                                             {/* Real-time Progress Bar */}
-                                                            {hasProgress && (
+                                                            {(hasProgress || isPaused) && (
                                                                 <div className="mb-6 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm">
                                                                     <div className="flex justify-between items-center text-xs font-bold text-slate-600 mb-2">
-                                                                        <span>Progresso do Processamento</span>
+                                                                        <span className="flex items-center gap-2">
+                                                                            <span>Progresso do Processamento</span>
+                                                                            {isPaused && (
+                                                                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                                                                                    Pausado
+                                                                                </Badge>
+                                                                            )}
+                                                                        </span>
                                                                         <span className="text-emerald-700">{progressPercent}% ({imp.total_processados} de {imp.total_encontrados} linhas)</span>
                                                                     </div>
                                                                     <Progress value={progressPercent} className="h-2.5 rounded-full bg-slate-100 [&>div]:bg-emerald-600" />
-                                                                    <div className="flex gap-4 mt-3 text-[11px] font-bold text-slate-400">
+                                                                    <div className="flex flex-wrap gap-4 mt-3 text-[11px] font-bold text-slate-400">
                                                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Criados: {imp.total_criados}</span>
                                                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Falhas: {imp.total_falhas}</span>
                                                                         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> Restantes: {imp.total_encontrados - imp.total_processados}</span>
@@ -567,19 +737,46 @@ export function MassCreationContent() {
                                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                                                                 <h5 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Lista de Funcionários Encontrados</h5>
                                                                 {importsStore.activeImport?.id === imp.id && (
-                                                                    <div className="flex items-center gap-4">
-                                                                        {imp.total_falhas > 0 && (
+                                                                    <div className="flex flex-wrap items-center gap-3">
+                                                                        {isProcessing && (
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => handlePauseImport(imp.id)}
+                                                                                disabled={pausingId === imp.id}
+                                                                                className="h-7 px-2.5 text-[10px] font-bold text-amber-700 border-amber-300 bg-amber-50 hover:bg-amber-100 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-none"
+                                                                            >
+                                                                                {pausingId === imp.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Pause className="w-3 h-3" />}
+                                                                                Pausar Processamento
+                                                                            </Button>
+                                                                        )}
+
+                                                                        {isPaused && (
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="sm"
+                                                                                onClick={() => handleResumeImport(imp.id)}
+                                                                                disabled={resumingId === imp.id}
+                                                                                className="h-7 px-2.5 text-[10px] font-bold text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-none"
+                                                                            >
+                                                                                {resumingId === imp.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3 fill-emerald-600" />}
+                                                                                Continuar Processamento
+                                                                            </Button>
+                                                                        )}
+
+                                                                        {imp.total_falhas > 0 && !isProcessing && (
                                                                             <Button
                                                                                 variant="outline"
                                                                                 size="sm"
                                                                                 onClick={() => handleRetryImport(imp.id)}
-                                                                                disabled={retryingId === imp.id || hasProgress}
+                                                                                disabled={retryingId === imp.id}
                                                                                 className="h-7 px-2.5 text-[10px] font-bold text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-lg flex items-center gap-1.5 cursor-pointer shadow-none"
                                                                             >
                                                                                 <RotateCw className={`w-3 h-3 ${retryingId === imp.id ? 'animate-spin' : ''}`} />
                                                                                 Reprocessar {imp.total_falhas} {imp.total_falhas === 1 ? "falha" : "falhas"}
                                                                             </Button>
                                                                         )}
+
                                                                         <label className="flex items-center gap-1.5 cursor-pointer select-none text-[10px] font-bold text-slate-500 hover:text-slate-700">
                                                                             <input
                                                                                 type="checkbox"
@@ -748,52 +945,59 @@ export function MassCreationContent() {
                                     <>
                                         <Upload className="w-8 h-8 text-slate-400" />
                                         <div className="text-center">
-                                            <p className="text-xs font-bold text-slate-600">Arraste a planilha ou clique aqui</p>
-                                            <p className="text-[10px] text-slate-400 mt-1">Excel (.xlsx, .xls) ou CSV</p>
+                                            <p className="text-xs font-bold text-slate-700">
+                                                Arraste seu arquivo aqui ou <span className="text-emerald-600 underline">clique para selecionar</span>
+                                            </p>
+                                            <p className="text-[10px] text-slate-400 mt-1">
+                                                Formatos suportados: .xlsx, .xls ou .csv (Máx. 20MB)
+                                            </p>
                                         </div>
                                     </>
                                 )}
                             </div>
 
-                            {/* Template Download Block */}
-                            <div className="flex items-center justify-between p-3.5 bg-emerald-50/50 border border-emerald-100 rounded-2xl">
-                                <div className="flex items-center gap-2">
-                                    <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
-                                    <div>
-                                        <h6 className="text-[11px] font-bold text-slate-700">Planilha Modelo</h6>
-                                        <p className="text-[10px] text-slate-400">Excel é o formato recomendado.</p>
+                            {selectedFile && (
+                                <div className="flex items-center justify-between p-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                                    <div className="flex items-center gap-2 truncate">
+                                        <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0" />
+                                        <span className="text-xs font-bold text-emerald-900 truncate">
+                                            {selectedFile.name}
+                                        </span>
                                     </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={removeFile}
+                                        className="h-6 w-6 p-0 text-slate-400 hover:text-red-600 rounded-md cursor-pointer"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
                                 </div>
-                                <div className="flex flex-col items-center gap-1">
-                                    <a href="/api/employees/import/template" download>
-                                        <Button variant="outline" size="sm" className="h-8 gap-1 cursor-pointer rounded-lg text-emerald-700 border-emerald-200 hover:bg-emerald-50 px-2.5">
-                                            <Download className="w-3 h-3" />
-                                            <span className="text-[10px] font-bold">Template Excel</span>
-                                        </Button>
-                                    </a>
-                                    <a href="/api/employees/import/template?format=csv" download>
-                                        <button className="text-[9px] font-semibold text-slate-400 hover:text-slate-600 underline text-center cursor-pointer">
-                                            Baixar em CSV
-                                        </button>
-                                    </a>
-                                </div>
-                            </div>
+                            )}
                         </div>
 
-                        {/* Right Side: Quick Instructions Guide */}
-                        <div className="p-4 bg-slate-50 border border-slate-100 rounded-2xl flex flex-col gap-2">
-                            <h6 className="text-xs font-bold text-slate-800 flex items-center gap-1.5 border-b border-slate-200 pb-1.5">
-                                <AlertCircle className="w-4 h-4 text-emerald-600" />
-                                Antes de importar
-                            </h6>
-                            <ul className="text-[10px] text-slate-500 space-y-2 list-disc list-inside font-medium leading-relaxed">
-                                <li>Preencha uma linha para cada funcionário.</li>
-                                <li>Não altere os nomes das colunas.</li>
-                                <li>Campos marcados com <span className="text-red-500 font-bold">*</span> são obrigatórios.</li>
-                                <li>Utilize datas no formato <span className="font-semibold text-slate-700">dd/mm/aaaa</span>.</li>
-                                <li>CPF e Email não podem estar duplicados.</li>
-                                <li>Salve a planilha antes de realizar o upload.</li>
-                            </ul>
+                        {/* Right Side: Information / Help Box */}
+                        <div className="border border-slate-100 rounded-2xl p-4 bg-slate-50/50 flex flex-col justify-between space-y-3">
+                            <div className="space-y-2">
+                                <h6 className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                    <AlertCircle className="w-4 h-4 text-emerald-600" />
+                                    Dicas de Importação
+                                </h6>
+                                <ul className="text-[11px] text-slate-500 space-y-1.5 list-disc pl-4 leading-relaxed">
+                                    <li>Utilize o modelo oficial para evitar erros de leitura nas colunas.</li>
+                                    <li>Campos obrigatórios: Nome, CPF, Email, Cargo, Gênero, Nascimento, Contato e Data de Admissão.</li>
+                                    <li>O tempo limite contínuo por lote é de 5 minutos, podendo ser pausado e retomado a qualquer momento.</li>
+                                </ul>
+                            </div>
+
+                            <a
+                                href="/api/employees/import/template"
+                                download="modelo_importacao_funcionarios.xlsx"
+                                className="w-full flex items-center justify-center gap-2 py-2 px-3 text-xs font-bold text-emerald-700 bg-emerald-100/50 hover:bg-emerald-100 rounded-xl transition-colors text-center"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Baixar Planilha Modelo
+                            </a>
                         </div>
                     </div>
 
@@ -808,25 +1012,15 @@ export function MassCreationContent() {
                         >
                             Cancelar
                         </Button>
-                        {selectedFile && (
-                            <Button
-                                variant="ghost"
-                                onClick={removeFile}
-                                className="text-red-500 hover:text-red-600 bg-red-50 hover:bg-red-100 rounded-xl cursor-pointer"
-                            >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Remover
-                            </Button>
-                        )}
                         <Button
-                            disabled={!selectedFile || importsStore.uploading}
                             onClick={handleStartImport}
+                            disabled={!selectedFile || importsStore.uploading}
                             className="text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl font-bold cursor-pointer"
                         >
                             {importsStore.uploading ? (
                                 <>
                                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Enviando...
+                                    Processando...
                                 </>
                             ) : (
                                 "Iniciar Importação"
@@ -836,16 +1030,15 @@ export function MassCreationContent() {
                 </DialogContent>
             </Dialog>
 
-            {/* 2. Manual Correction Dialog */}
+            {/* 2. Correction Dialog */}
             <Dialog open={isCorrectOpen} onOpenChange={setIsCorrectOpen}>
-                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto rounded-3xl p-6 border-slate-100 bg-white">
+                <DialogContent className="sm:max-w-[700px] rounded-3xl p-6 border-slate-100 bg-white max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                        <DialogTitle className="text-lg font-black text-slate-800 flex items-center gap-2">
-                            <AlertCircle className="w-5 h-5 text-red-500" />
-                            Corrigir Dados de Funcionário
+                        <DialogTitle className="text-lg font-black text-slate-800">
+                            Corrigir e Cadastrar Funcionário (Linha {currentItem?.linha_planilha})
                         </DialogTitle>
                         <DialogDescription className="text-xs">
-                            Corrija as inconsistências de preenchimento para criar o funcionário. Erros estão sinalizados em vermelho.
+                            Corrija as inconsistências para criar o funcionário e seus documentos/treinamentos padrões.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1079,6 +1272,90 @@ export function MassCreationContent() {
                                 </>
                             ) : (
                                 "Criar Funcionário"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* 3. Delete Single Import Confirmation Dialog */}
+            <Dialog open={!!importToDelete} onOpenChange={(open) => !open && setImportToDelete(null)}>
+                <DialogContent className="sm:max-w-[450px] rounded-3xl p-6 border-slate-100 bg-white">
+                    <DialogHeader>
+                        <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-2">
+                            <Trash2 className="w-5 h-5" />
+                        </div>
+                        <DialogTitle className="text-base font-bold text-slate-800">
+                            Excluir Importação #{importToDelete?.id}?
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Esta ação removerá o registro do lote <strong className="text-slate-700 font-semibold">{importToDelete?.arquivo}</strong> do histórico. Os funcionários já criados no sistema não serão excluídos.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter className="gap-2 mt-4 sm:justify-end">
+                        <Button
+                            variant="outline"
+                            onClick={() => setImportToDelete(null)}
+                            className="rounded-xl cursor-pointer"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleConfirmDeleteSingle}
+                            disabled={deletingId !== null}
+                            className="rounded-xl font-bold bg-red-600 hover:bg-red-700 cursor-pointer"
+                        >
+                            {deletingId !== null ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Excluindo...
+                                </>
+                            ) : (
+                                "Excluir Importação"
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* 4. Clear Entire History Confirmation Dialog */}
+            <Dialog open={isClearHistoryOpen} onOpenChange={setIsClearHistoryOpen}>
+                <DialogContent className="sm:max-w-[480px] rounded-3xl p-6 border-slate-100 bg-white">
+                    <DialogHeader>
+                        <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-2">
+                            <AlertOctagon className="w-5 h-5" />
+                        </div>
+                        <DialogTitle className="text-base font-bold text-slate-800">
+                            Limpar Todo o Histórico de Importações?
+                        </DialogTitle>
+                        <DialogDescription className="text-xs text-slate-500">
+                            Tem certeza que deseja apagar todos os registros de importações desta empresa? Todos os lotes e relatórios de falhas anteriores serão removidos. Os funcionários já cadastrados permanecerão salvos.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <DialogFooter className="gap-2 mt-4 sm:justify-end">
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsClearHistoryOpen(false)}
+                            className="rounded-xl cursor-pointer"
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleConfirmClearHistory}
+                            disabled={isClearingHistory}
+                            className="rounded-xl font-bold bg-red-600 hover:bg-red-700 cursor-pointer"
+                        >
+                            {isClearingHistory ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Limpando histórico...
+                                </>
+                            ) : (
+                                "Sim, Limpar Histórico"
                             )}
                         </Button>
                     </DialogFooter>
