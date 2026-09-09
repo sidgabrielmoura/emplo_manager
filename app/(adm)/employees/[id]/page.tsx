@@ -399,8 +399,8 @@ export default function EmployeeProfilePage() {
       let fileUrl = currentFileUrl
 
       if (file) {
-        const uploaded: any = await uploadImage(file).catch(() => {
-          toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+        const uploaded: any = await uploadImage(file, "employees").catch((err) => {
+          toast.error(err?.message || "Ocorreu um erro no upload do documento")
           return null
         })
 
@@ -446,8 +446,8 @@ export default function EmployeeProfilePage() {
       let fileUrl = currentFileUrl
 
       if (file) {
-        const uploaded: any = await uploadImage(file).catch(() => {
-          toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+        const uploaded: any = await uploadImage(file, "employees").catch((err) => {
+          toast.error(err?.message || "Ocorreu um erro no upload do treinamento")
           return null
         })
 

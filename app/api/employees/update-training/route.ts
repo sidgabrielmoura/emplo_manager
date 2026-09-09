@@ -31,6 +31,10 @@ export async function PUT(req: NextRequest) {
                 return NextResponse.json({ error: "Requisito não encontrado" }, { status: 404 })
             }
 
+            if (!body.employeeId) {
+                return NextResponse.json({ error: "employeeId é obrigatório" }, { status: 400 })
+            }
+
             const employee = await db.employee.findUnique({
                 where: { id: body.employeeId },
                 select: { companyId: true }

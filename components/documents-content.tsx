@@ -86,8 +86,8 @@ export function DocumentsContent() {
 
     setLoading(true)
     try {
-      const uploaded: any = await uploadImage(file!).catch(() => {
-        toast.error("O arquivo selecionado é muito grande ou ocorreu um erro no upload")
+      const uploaded: any = await uploadImage(file!, "employees").catch((err) => {
+        toast.error(err?.message || "O arquivo selecionado é muito grande ou ocorreu um erro no upload")
         return null
       })
 

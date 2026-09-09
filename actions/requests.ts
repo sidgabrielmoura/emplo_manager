@@ -339,13 +339,52 @@ export async function getAllUsers(company_id: string) {
     }
 }
 
-export async function uploadImage(file: File) {
+export async function uploadImage(file: File, folder: string = "employees") {
+    // 1. Tenta upload direto via Presigned URL (suporta arquivos grandes de 10MB, 50MB, 100MB+ sem limite de 4.5MB da Vercel)
+    try {
+        const { data: presign } = await axios.post(
+            "/upload/presign",
+            {
+                fileName: file.name,
+                fileType: file.type,
+                folder,
+            },
+            { baseURL: base_url }
+        )
+
+        if (presign?.uploadUrl) {
+            const uploadRes = await fetch(presign.uploadUrl, {
+                method: "PUT",
+                body: file,
+                headers: {
+                    "Content-Type": presign.contentType || file.type || "application/octet-stream",
+                },
+            })
+
+            if (uploadRes.ok) {
+                return {
+                    url: presign.url,
+                    public_id: presign.public_id,
+                    originalName: presign.originalName || file.name,
+                }
+            } else {
+                console.warn(`Presigned PUT failed with status ${uploadRes.status}, falling back to /api/upload`)
+            }
+        }
+    } catch (presignError: any) {
+        console.warn("Direct R2 presigned upload failed:", presignError)
+
+        // Se o arquivo for maior que 4.5MB e o upload direto falhar (por exemplo, CORS ausente no bucket R2)
+        if (file.size > 4.5 * 1024 * 1024) {
+            throw new Error("O arquivo selecionado excede 4.5MB. Para arquivos grandes, ative a política CORS no bucket Cloudflare R2.")
+        }
+    }
+
+    // 2. Fallback para rota tradicional /api/upload (arquivos normais ou ambientes locais)
     try {
         const formData = new FormData()
-
         formData.append("file", file)
-
-        formData.append("folder", "employees")
+        formData.append("folder", folder)
 
         const { data } = await axios.post("/upload", formData, {
             baseURL: base_url,
@@ -355,8 +394,11 @@ export async function uploadImage(file: File) {
         })
 
         return data
-    } catch (error) {
-        throw error
+    } catch (error: any) {
+        if (error?.response?.status === 413) {
+            throw new Error("O arquivo selecionado é muito grande (limite de payload excedido pelo servidor).")
+        }
+        throw new Error(error?.response?.data?.error || error?.message || "Erro ao fazer upload do arquivo")
     }
 }
 
@@ -626,7 +668,7 @@ export async function updateTraining(payload: {
     try {
         const { data } = await axios.put(
             '/employees/update-training',
-            { ...payload },
+            { ...payload, employeeId: employee_id },
             { baseURL: base_url }
         )
 

@@ -2,6 +2,7 @@ import { r2 } from "@/lib/r2"
 import { getServerUserId, unauthorizedResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
 import { PutObjectCommand } from "@aws-sdk/client-s3"
+import { sanitizeFileName, inferContentType } from "@/lib/file-utils"
 
 export async function POST(req: NextRequest) {
   try {
@@ -29,11 +30,10 @@ export async function POST(req: NextRequest) {
 
     const uploads = await Promise.all(
       files.map(async (file) => {
-        const bytes = await file.arrayBuffer()
-        const buffer = Buffer.from(bytes)
-
-        
-        const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "_")}`
+        const buffer = Buffer.from(await file.arrayBuffer())
+        const safeName = sanitizeFileName(file.name)
+        const contentType = inferContentType(file.name, file.type)
+        const fileName = `${Date.now()}-${safeName}`
         const key = `${folder}/${fileName}`
 
         await r2.send(
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
             Bucket: bucketName,
             Key: key,
             Body: buffer,
-            ContentType: file.type,
+            ContentType: contentType,
           })
         )
 

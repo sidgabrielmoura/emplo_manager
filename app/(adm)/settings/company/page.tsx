@@ -310,8 +310,8 @@ export default function CompanySettingsPage() {
             let fileUrl = currentFileUrl
 
             if (uploadFile) {
-                const uploaded: any = await uploadImage(uploadFile).catch(() => {
-                    toast.error("Erro ao fazer upload do arquivo (pode ser muito grande).")
+                const uploaded: any = await uploadImage(uploadFile, "company-documents").catch((err) => {
+                    toast.error(err?.message || "Erro ao fazer upload do arquivo.")
                     return null
                 })
 
