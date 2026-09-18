@@ -1664,6 +1664,60 @@ export async function updateNotificationSettings(companyId: string, notification
     }
 }
 
+export async function deleteSuperAdminCompany(companyId: string) {
+    try {
+        const { data } = await axios.delete(
+            `/superadmin/companies?companyId=${companyId}`,
+            {
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteSuperAdminCompany error:", error)
+        throw error
+    }
+}
 
+export async function toggleCompanyDocStatus(payload: {
+    companyId: string,
+    type: string,
+    name?: string,
+    isEnabled: boolean,
+    isCustom?: boolean
+}) {
+    try {
+        const { data } = await axios.put(
+            `/company-documents/toggle-status`,
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("toggleCompanyDocStatus error:", error)
+        throw error
+    }
+}
 
-
+export async function deleteCompanyDoc(payload: {
+    companyId: string,
+    documentId?: string,
+    type?: string,
+    name?: string,
+    isCustom?: boolean,
+    deleteFileOnly?: boolean,
+    disableAfterDelete?: boolean
+}) {
+    try {
+        const { data } = await axios.post(
+            `/company-documents/delete`,
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteCompanyDoc error:", error)
+        throw error
+    }
+}

@@ -1,6 +1,7 @@
 import db from "@/lib/prisma"
 import { getServerUserId, unauthorizedResponse, validateCompanyAccess, forbiddenResponse } from "@/lib/auth"
 import { NextRequest, NextResponse } from "next/server"
+import { updateExpiredStatuses } from "@/lib/docs"
 
 export async function POST(req: NextRequest) {
     try {
@@ -26,6 +27,10 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, companyId)
         if (!hasAccess) return forbiddenResponse()
 
+        await updateExpiredStatuses(companyId).catch((err) => {
+            console.error("Erro ao atualizar status de documentos expirados:", err)
+        })
+
         const [documents, requirements] = await Promise.all([
             db.companyDocument.findMany({
                 where: { companyId: companyId, deletedAt: null },
@@ -34,8 +39,7 @@ export async function POST(req: NextRequest) {
             db.companyRequiredDocument.findMany({
                 where: {
                     companyId: companyId,
-                    target: { in: ["COMPANY_DOC", "COMPANY_LABOR"] },
-                    isEnabled: true
+                    target: { in: ["COMPANY_DOC", "COMPANY_LABOR"] }
                 }
             })
         ])
@@ -45,18 +49,20 @@ export async function POST(req: NextRequest) {
             return requirements.some(req => req.name === doc.name);
         });
 
-        // Map real documents and attach their corresponding targets
+        // Map real documents and attach their corresponding targets and isEnabled
         const mergedDocuments = activeRealDocs.map(doc => {
             if (doc.type === "CUSTOM") {
                 const req = requirements.find(r => r.name === doc.name)
                 return {
                     ...doc,
-                    target: req ? req.target : "COMPANY_DOC"
+                    target: req ? req.target : "COMPANY_DOC",
+                    isEnabled: req ? req.isEnabled : !company.disabledDocuments.includes(doc.name)
                 }
             }
             return {
                 ...doc,
-                target: "COMPANY_DOC" // standard docs defaults to company docs
+                target: "COMPANY_DOC", // standard docs defaults to company docs
+                isEnabled: !company.disabledDocuments.includes(doc.type)
             }
         })
 
@@ -76,7 +82,8 @@ export async function POST(req: NextRequest) {
                     createdAt: new Date(),
                     updatedAt: new Date(),
                     deletedAt: null,
-                    target: req.target
+                    target: req.target,
+                    isEnabled: req.isEnabled
                 } as any)
             }
         })

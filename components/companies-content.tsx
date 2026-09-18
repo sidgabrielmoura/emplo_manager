@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Ban, CheckCircle, Plus, Upload, Loader2, Building2, Users, ShieldAlert, Pencil, Eye } from "lucide-react"
+import { Search, Ban, CheckCircle, Plus, Upload, Loader2, Building2, Users, ShieldAlert, Pencil, Eye, Trash2, AlertTriangle } from "lucide-react"
 import {
   Dialog,
   DialogClose,
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { createCompany, uploadImage, getSuperAdminCompanies, toggleCompanyStatus, updateCompany } from "@/actions/requests"
+import { createCompany, uploadImage, getSuperAdminCompanies, toggleCompanyStatus, updateCompany, deleteSuperAdminCompany } from "@/actions/requests"
 import { useUserStore } from "@/stores/user"
 import { useSnapshot } from "valtio"
 import { maskCNPJ, maskPhone } from "@/helpers"
@@ -75,6 +75,9 @@ export function CompaniesContent() {
   })
   const [editActionLoading, setEditActionLoading] = useState(false)
   const editFileInputRef = useRef<HTMLInputElement>(null)
+  const [deletingCompany, setDeletingCompany] = useState<Company | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const { user } = useSnapshot(useUserStore)
 
   const [form, setForm] = useState({
@@ -212,6 +215,22 @@ export function CompaniesContent() {
       toast.error("Erro ao atualizar a empresa.")
     } finally {
       setEditActionLoading(false)
+    }
+  }
+
+  const handleDeleteCompany = async () => {
+    if (!deletingCompany) return
+    setDeleteLoading(true)
+    try {
+      const res: any = await deleteSuperAdminCompany(deletingCompany.id)
+      toast.success(res?.message || "Empresa e todos os seus arquivos foram excluídos com sucesso!")
+      setDeleteDialogOpen(false)
+      setDeletingCompany(null)
+      fetchCompanies()
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao excluir a empresa.")
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -428,6 +447,17 @@ export function CompaniesContent() {
                             </DialogFooter>
                           </DialogContent>
                         </Dialog>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDeletingCompany(company)
+                            setDeleteDialogOpen(true)
+                          }}
+                          className="gap-1.5 rounded-xl text-xs font-bold cursor-pointer text-red-600 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Excluir
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -510,6 +540,55 @@ export function CompaniesContent() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteDialogOpen(open) }}>
+        <DialogContent className="rounded-3xl max-w-md">
+          <DialogHeader>
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 mb-2">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold text-center text-slate-900">Excluir Organização</DialogTitle>
+            <DialogDescription asChild>
+              <div className="text-center text-slate-600 space-y-3 mt-2 text-sm">
+                <p>
+                  Tem certeza absoluta que deseja excluir permanentemente a empresa <strong className="text-slate-900">{deletingCompany?.name}</strong>?
+                </p>
+                <div className="p-3.5 bg-red-50/80 border border-red-200 rounded-2xl text-xs text-red-900 text-left space-y-1.5">
+                  <p className="font-bold flex items-center gap-1.5 text-red-800">
+                    <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                    Esta ação é irreversível e irá executar:
+                  </p>
+                  <ul className="list-disc pl-4 space-y-1 text-[11px] text-red-700">
+                    <li>Expurgo de <strong>todos os documentos e fotos</strong> no Cloudflare R2</li>
+                    <li>Exclusão de todos os funcionários, contratos e treinamentos</li>
+                    <li>Remoção de usuários e centros de custo vinculados</li>
+                    <li>Exclusão completa de todos os dados no banco de dados</li>
+                  </ul>
+                </div>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2 mt-3">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteLoading}
+              className="rounded-xl flex-1 cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleDeleteCompany}
+              disabled={deleteLoading}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex-1 cursor-pointer gap-2"
+            >
+              {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {deleteLoading ? "Excluindo..." : "Sim, Excluir Tudo"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+

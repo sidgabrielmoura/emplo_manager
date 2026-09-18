@@ -6,9 +6,9 @@ import { AppLayout } from "@/components/app-layout"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { StatusBadge } from "@/components/status-badge"
-import { ArrowLeft, Building2, Mail, MapPin, Calendar, Ban, Plus, Trash2, Loader2, User, Building, FileText, Upload, Eye, Phone, Users, Activity, Pencil, Save } from "lucide-react"
+import { ArrowLeft, Building2, Mail, MapPin, Calendar, Ban, Plus, Trash2, Loader2, User, Building, FileText, Upload, Eye, Phone, Users, Activity, Pencil, Save, AlertTriangle } from "lucide-react"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -21,7 +21,8 @@ import {
   getEmployees,
   updateCompanyRequiredDocument,
   updateCompanyStandardDocument,
-  toggleCompanyRequiredDocument
+  toggleCompanyRequiredDocument,
+  deleteSuperAdminCompany
 } from "@/actions/requests"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -30,7 +31,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
 import { DOCUMENTS_PT_BR, TRAININGS_PT_BR } from "@/lib/constants/documents"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const COMPANY_DOCS = [
@@ -76,7 +77,25 @@ export default function CompanyDetailsPage() {
   const [newName, setNewName] = useState("")
   const [newTarget, setNewTarget] = useState<"EMPLOYEE_DOC" | "EMPLOYEE_TRAINING" | "COMPANY_DOC" | "COMPANY_LABOR">("EMPLOYEE_DOC")
   const [newValidity, setNewValidity] = useState("")
+  const router = useRouter()
   const [employeesCount, setEmployeesCount] = useState(0)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  const handleDeleteCompany = async () => {
+    if (!companyId) return
+    setDeleteLoading(true)
+    try {
+      const res: any = await deleteSuperAdminCompany(companyId)
+      toast.success(res?.message || "Empresa e todos os arquivos excluídos com sucesso!")
+      setDeleteDialogOpen(false)
+      router.push('/superadmin/companies')
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || "Erro ao excluir a empresa.")
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!companyId) return
@@ -254,6 +273,14 @@ export default function CompanyDetailsPage() {
             <h1 className="text-3xl font-bold text-foreground">{company.name}</h1>
             <p className="text-muted-foreground mt-1">Detalhes da Empresa</p>
           </div>
+          <Button
+            variant="destructive"
+            onClick={() => setDeleteDialogOpen(true)}
+            className="rounded-xl font-bold gap-2 cursor-pointer shadow-sm"
+          >
+            <Trash2 className="w-4 h-4" />
+            Excluir Empresa
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -664,10 +691,59 @@ export default function CompanyDetailsPage() {
             </TabsContent>
           </Tabs>
         </div>
+
+        <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteDialogOpen(open) }}>
+          <DialogContent className="rounded-3xl max-w-md">
+            <DialogHeader>
+              <div className="mx-auto w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 mb-2">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <DialogTitle className="text-xl font-bold text-center text-slate-900">Excluir Organização</DialogTitle>
+              <DialogDescription asChild>
+                <div className="text-center text-slate-600 space-y-3 mt-2 text-sm">
+                  <p>
+                    Tem certeza absoluta que deseja excluir permanentemente a empresa <strong className="text-slate-900">{company.name}</strong>?
+                  </p>
+                  <div className="p-3.5 bg-red-50/80 border border-red-200 rounded-2xl text-xs text-red-900 text-left space-y-1.5">
+                    <p className="font-bold flex items-center gap-1.5 text-red-800">
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      Esta ação é irreversível e irá executar:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-1 text-[11px] text-red-700">
+                      <li>Expurgo de <strong>todos os documentos e fotos</strong> no Cloudflare R2</li>
+                      <li>Exclusão de todos os funcionários, contratos e treinamentos</li>
+                      <li>Remoção de usuários e centros de custo vinculados</li>
+                      <li>Exclusão completa de todos os dados no banco de dados</li>
+                    </ul>
+                  </div>
+                </div>
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-2 mt-3">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deleteLoading}
+                className="rounded-xl flex-1 cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleDeleteCompany}
+                disabled={deleteLoading}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex-1 cursor-pointer gap-2"
+              >
+                {deleteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deleteLoading ? "Excluindo..." : "Sim, Excluir Tudo"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   )
 }
+
 
 function StandardDocItem({
   doc,

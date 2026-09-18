@@ -394,7 +394,7 @@ export default function CompanySettingsPage() {
                     </div>
                 )}
 
-                <Card className="rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white">
+                <Card className="rounded-[2.5rem] p-0! border-slate-100 shadow-sm overflow-hidden bg-white">
                     <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-8">
                         <CardTitle className="text-slate-800 text-xl font-bold flex items-center gap-2">
                             <FileText className="w-5 h-5 text-emerald-600" /> {isAdditional ? "Documentos Adicionais" : "Referência de Documentos"}
@@ -427,13 +427,34 @@ export default function CompanySettingsPage() {
                                                     ? (d.type === "CUSTOM" && d.name === label)
                                                     : d.type === type
                                             )
+                                            const isExpired = docData?.status === "EXPIRED" || (
+                                                docData?.expiresAt ? new Date(docData.expiresAt).getTime() < new Date().setUTCHours(0, 0, 0, 0) : false
+                                            );
                                             return (
                                                 <TableRow key={type + label}>
                                                     <TableCell className="font-medium text-slate-700 max-w-[250px] truncate">{label}</TableCell>
                                                     <TableCell className="text-center">
-                                                        <Badge variant={!docData ? "secondary" : docData.status === "APPROVED" ? "default" : "destructive"}>
-                                                            {!docData ? "Pendente" : docData.status === "APPROVED" ? "Aprovado" : "Pendência"}
-                                                        </Badge>
+                                                        {!docData ? (
+                                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-slate-200 font-bold text-[11px]">
+                                                                Não enviado
+                                                            </Badge>
+                                                        ) : isExpired ? (
+                                                            <Badge variant="destructive" className="bg-red-500 hover:bg-red-600 text-white shadow-xs font-bold text-[11px]">
+                                                                Vencido
+                                                            </Badge>
+                                                        ) : docData.status === "REJECTED" ? (
+                                                            <Badge variant="destructive" className="bg-red-100 text-red-700 border-red-200 font-bold text-[11px]">
+                                                                Reprovado
+                                                            </Badge>
+                                                        ) : docData.status === "APPROVED" ? (
+                                                            <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs font-bold text-[11px]">
+                                                                Aprovado
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 font-bold text-[11px]">
+                                                                Em análise
+                                                            </Badge>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell className="text-center text-slate-500">
                                                         {docData?.issuedAt ? new Date(docData.issuedAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
