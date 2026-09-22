@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         if (!userId) return unauthorizedResponse()
 
         const body = await req.json()
-        const { employeeId, id1, id2 } = body
+        const { employeeId, id1, id2, pos1, pos2 } = body
 
         if (!employeeId || !id1 || !id2) {
             return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 })
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
-        const getOrUpsertTraining = async (trainingId: string) => {
+        const getOrUpsertTraining = async (trainingId: string, fallbackPos?: number) => {
             if (trainingId.startsWith("virtual-")) {
                 const reqId = trainingId.replace("virtual-", "")
                 const requirement = await db.companyRequiredDocument.findUnique({
@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
 
                 if (existing) return existing
 
+                const initialPosition = fallbackPos && fallbackPos > 0
+                    ? fallbackPos
+                    : (requirement.position > 0 ? requirement.position : 1)
+
                 return await db.training.create({
                     data: {
                         employeeId,
@@ -53,7 +57,7 @@ export async function POST(req: NextRequest) {
                         name: requirement.name,
                         status: "PENDING",
                         isEnabled: true,
-                        position: requirement.position
+                        position: initialPosition
                     }
                 })
             }
@@ -65,48 +69,20 @@ export async function POST(req: NextRequest) {
             return training
         }
 
-        const training1 = await getOrUpsertTraining(id1)
-        const training2 = await getOrUpsertTraining(id2)
+        const training1 = await getOrUpsertTraining(id1, pos1)
+        const training2 = await getOrUpsertTraining(id2, pos2)
 
-        const allTrainings = await db.training.findMany({
-            where: { employeeId, deletedAt: null },
-            orderBy: [
-                { position: "asc" },
-                { createdAt: "asc" }
-            ]
-        })
+        const p1 = typeof pos1 === "number" && pos1 > 0 ? pos1 : training1.position
+        const p2 = typeof pos2 === "number" && pos2 > 0 ? pos2 : training2.position
 
-        const positions = allTrainings.map(t => t.position)
-        const hasDuplicatesOrZeros = positions.some(p => p === 0) || new Set(positions).size !== positions.length
-
-        let finalTraining1 = training1
-        let finalTraining2 = training2
-
-        if (hasDuplicatesOrZeros) {
-            await db.$transaction(
-                allTrainings.map((t, idx) => 
-                    db.training.update({
-                        where: { id: t.id },
-                        data: { position: idx + 1 }
-                    })
-                )
-            )
-
-            const updatedTraining1 = await db.training.findUnique({ where: { id: training1.id } })
-            const updatedTraining2 = await db.training.findUnique({ where: { id: training2.id } })
-            if (updatedTraining1) finalTraining1 = updatedTraining1
-            if (updatedTraining2) finalTraining2 = updatedTraining2
-        }
-
-        const tempPos = finalTraining1.position
         await db.$transaction([
             db.training.update({
-                where: { id: finalTraining1.id },
-                data: { position: finalTraining2.position }
+                where: { id: training1.id },
+                data: { position: p2 }
             }),
             db.training.update({
-                where: { id: finalTraining2.id },
-                data: { position: tempPos }
+                where: { id: training2.id },
+                data: { position: p1 }
             })
         ])
 

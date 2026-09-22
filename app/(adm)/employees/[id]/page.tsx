@@ -122,9 +122,19 @@ export default function EmployeeProfilePage() {
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([])
   const [selectedTrainingIds, setSelectedTrainingIds] = useState<string[]>([])
   const [loadingArrowId, setLoadingArrowId] = useState<string | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<{ type: "document" | "training"; ids: string[] } | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ type: "document" | "training"; ids: string[]; stage: "attachment" | "row" } | null>(null)
   const [editingDocName, setEditingDocName] = useState("")
   const [editingTrainingName, setEditingTrainingName] = useState("")
+
+  const selectedDocs = documents?.filter(d => selectedDocIds.includes(d.id)) || []
+  const hasAttachedDocs = selectedDocs.some(d => Boolean(d.fileUrl))
+  const hasEmptyDocs = selectedDocs.some(d => !d.fileUrl)
+  const hasMixedDocStages = hasAttachedDocs && hasEmptyDocs
+
+  const selectedTrainings = trainings?.filter(t => selectedTrainingIds.includes(t.id)) || []
+  const hasAttachedTrainings = selectedTrainings.some(t => Boolean(t.fileUrl))
+  const hasEmptyTrainings = selectedTrainings.some(t => !t.fileUrl)
+  const hasMixedTrainingStages = hasAttachedTrainings && hasEmptyTrainings
 
   const handleMoveDoc = async (index: number, direction: "up" | "down") => {
     if (!canEditDocuments) {
@@ -140,7 +150,7 @@ export default function EmployeeProfilePage() {
 
     setLoadingArrowId(doc1.id)
     try {
-      await swapEmployeeDocuments(employee.id, doc1.id, doc2.id)
+      await swapEmployeeDocuments(employee.id, doc1.id, doc2.id, doc1.position, doc2.position)
       toast.success("Posição atualizada com sucesso")
     } catch (error) {
       toast.error("Erro ao alterar posição")
@@ -163,7 +173,7 @@ export default function EmployeeProfilePage() {
 
     setLoadingArrowId(t1.id)
     try {
-      await swapEmployeeTrainings(employee.id, t1.id, t2.id)
+      await swapEmployeeTrainings(employee.id, t1.id, t2.id, t1.position, t2.position)
       toast.success("Posição atualizada com sucesso")
     } catch (error) {
       toast.error("Erro ao alterar posição")
@@ -172,22 +182,26 @@ export default function EmployeeProfilePage() {
     }
   }
 
-  const handleBulkDeleteDocs = async () => {
-    if (selectedDocIds.length === 0 || !employee?.id) return
-    setDeleteTarget({ type: "document", ids: selectedDocIds })
+  const handleBulkDeleteDocs = () => {
+    if (selectedDocIds.length === 0 || !employee?.id || hasMixedDocStages) return
+    const stage: "attachment" | "row" = hasAttachedDocs ? "attachment" : "row"
+    setDeleteTarget({ type: "document", ids: selectedDocIds, stage })
   }
 
-  const handleBulkDeleteTrainings = async () => {
-    if (selectedTrainingIds.length === 0 || !employee?.id) return
-    setDeleteTarget({ type: "training", ids: selectedTrainingIds })
+  const handleBulkDeleteTrainings = () => {
+    if (selectedTrainingIds.length === 0 || !employee?.id || hasMixedTrainingStages) return
+    const stage: "attachment" | "row" = hasAttachedTrainings ? "attachment" : "row"
+    setDeleteTarget({ type: "training", ids: selectedTrainingIds, stage })
   }
 
-  const handleSingleDeleteDoc = (docId: string) => {
-    setDeleteTarget({ type: "document", ids: [docId] })
+  const handleSingleDeleteDoc = (doc: any) => {
+    const stage: "attachment" | "row" = doc.fileUrl ? "attachment" : "row"
+    setDeleteTarget({ type: "document", ids: [doc.id], stage })
   }
 
-  const handleSingleDeleteTraining = (trainingId: string) => {
-    setDeleteTarget({ type: "training", ids: [trainingId] })
+  const handleSingleDeleteTraining = (training: any) => {
+    const stage: "attachment" | "row" = training.fileUrl ? "attachment" : "row"
+    setDeleteTarget({ type: "training", ids: [training.id], stage })
   }
 
   const handleAddCustomDoc = async () => {
@@ -207,10 +221,19 @@ export default function EmployeeProfilePage() {
   const handleToggleDocStatus = async (docId: string, isEnabled: boolean) => {
     if (!employee?.id) return
     setTogglingDocId(docId)
+
+    const prevDocs = useEmployeesStore.employee_documents ? [...useEmployeesStore.employee_documents] : []
+    const docToToggle = prevDocs.find(d => d.id === docId)
+    const position = docToToggle?.position
+    if (docToToggle) {
+      useEmployeesStore.employee_documents = prevDocs.map(d => d.id === docId ? { ...d, isEnabled } : d)
+    }
+
     try {
-      await toggleEmployeeDocumentStatus({ employeeId: employee.id, documentId: docId, isEnabled })
+      await toggleEmployeeDocumentStatus({ employeeId: employee.id, documentId: docId, isEnabled, position })
       toast.success(isEnabled ? "Documento habilitado" : "Documento desabilitado")
     } catch (error: any) {
+      useEmployeesStore.employee_documents = prevDocs
       toast.error(error?.response?.data?.error || "Erro ao atualizar status do documento")
     } finally {
       setTogglingDocId(null)
@@ -234,10 +257,19 @@ export default function EmployeeProfilePage() {
   const handleToggleTrainingStatus = async (trainingId: string, isEnabled: boolean) => {
     if (!employee?.id) return
     setTogglingTrainingId(trainingId)
+
+    const prevTrainings = useEmployeesStore.employee_trainings ? [...useEmployeesStore.employee_trainings] : []
+    const trainingToToggle = prevTrainings.find(t => t.id === trainingId)
+    const position = trainingToToggle?.position
+    if (trainingToToggle) {
+      useEmployeesStore.employee_trainings = prevTrainings.map(t => t.id === trainingId ? { ...t, isEnabled } : t)
+    }
+
     try {
-      await toggleEmployeeTrainingStatus({ employeeId: employee.id, trainingId, isEnabled })
+      await toggleEmployeeTrainingStatus({ employeeId: employee.id, trainingId, isEnabled, position })
       toast.success(isEnabled ? "Treinamento habilitado" : "Treinamento desabilitado")
     } catch (error: any) {
+      useEmployeesStore.employee_trainings = prevTrainings
       toast.error(error?.response?.data?.error || "Erro ao atualizar status do treinamento")
     } finally {
       setTogglingTrainingId(null)
@@ -1012,11 +1044,15 @@ export default function EmployeeProfilePage() {
                       variant="destructive"
                       size="sm"
                       className="gap-2 cursor-pointer"
-                      disabled={selectedDocIds.length === 0}
-                      onClick={() => setDeleteTarget({ type: "document", ids: selectedDocIds })}
+                      disabled={selectedDocIds.length === 0 || hasMixedDocStages}
+                      onClick={handleBulkDeleteDocs}
                     >
                       <Trash2 className="w-4 h-4" />
-                      Deletar Selecionados ({selectedDocIds.length})
+                      {hasMixedDocStages
+                        ? "Seleção Inválida"
+                        : hasAttachedDocs
+                          ? `Deletar Anexos (${selectedDocIds.length})`
+                          : `Excluir Linhas (${selectedDocIds.length})`}
                     </Button>
                   )}
                   {documents && documents.some((d: any) => d.fileUrl && d.isEnabled !== false) && (
@@ -1076,7 +1112,19 @@ export default function EmployeeProfilePage() {
                     ))}
                   </div>
                 ) : documents?.length ? (
-                  <div className="overflow-x-auto">
+                  <>
+                    {hasMixedDocStages && (
+                      <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-xs animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-amber-800">Não é possível excluir estágios diferentes simultaneamente</p>
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Você selecionou documentos com arquivo anexado e linhas sem documento ao mesmo tempo. Para realizar a exclusão em massa, selecione apenas documentos de um mesmo estágio.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1241,12 +1289,12 @@ export default function EmployeeProfilePage() {
                                 {doc.isEnabled === false ? (
                                   <div className="flex items-center justify-end gap-2">
                                     <span className="text-muted-foreground text-xs font-semibold mr-4">Não aplicável</span>
-                                    {!doc.id.startsWith("virtual-") && (
+                                    {canEditDocuments && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
-                                        onClick={() => handleSingleDeleteDoc(doc.id)}
+                                        onClick={() => handleSingleDeleteDoc(doc)}
                                       >
                                         <Trash2 className="size-4" />
                                       </Button>
@@ -1449,12 +1497,12 @@ export default function EmployeeProfilePage() {
                                       </DialogContent>
                                     </Dialog>
 
-                                    {canEditDocuments && !doc.id.startsWith("virtual-") && (
+                                    {canEditDocuments && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
-                                        onClick={() => handleSingleDeleteDoc(doc.id)}
+                                        onClick={() => handleSingleDeleteDoc(doc)}
                                       >
                                         <Trash2 className="size-4" />
                                       </Button>
@@ -1468,6 +1516,7 @@ export default function EmployeeProfilePage() {
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 ) : (
                   <p className="text-muted-foreground text-sm">
                     Nenhum documento cadastrado para este funcionário.
@@ -1490,11 +1539,15 @@ export default function EmployeeProfilePage() {
                       variant="destructive"
                       size="sm"
                       className="gap-2 cursor-pointer"
-                      disabled={selectedTrainingIds.length === 0}
-                      onClick={() => setDeleteTarget({ type: "training", ids: selectedTrainingIds })}
+                      disabled={selectedTrainingIds.length === 0 || hasMixedTrainingStages}
+                      onClick={handleBulkDeleteTrainings}
                     >
                       <Trash2 className="w-4 h-4" />
-                      Deletar Selecionados ({selectedTrainingIds.length})
+                      {hasMixedTrainingStages
+                        ? "Seleção Inválida"
+                        : hasAttachedTrainings
+                          ? `Deletar Anexos (${selectedTrainingIds.length})`
+                          : `Excluir Linhas (${selectedTrainingIds.length})`}
                     </Button>
                   )}
                   {trainings && trainings.some((t: any) => t.fileUrl && t.isEnabled !== false) && (
@@ -1554,7 +1607,19 @@ export default function EmployeeProfilePage() {
                     ))}
                   </div>
                 ) : trainings?.length ? (
-                  <div className="overflow-x-auto">
+                  <>
+                    {hasMixedTrainingStages && (
+                      <div className="mb-4 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-xs animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="w-5 h-5 shrink-0 text-amber-600 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-amber-800">Não é possível excluir estágios diferentes simultaneamente</p>
+                          <p className="text-xs text-amber-700 mt-0.5">
+                            Você selecionou treinamentos com arquivo anexado e linhas sem treinamento ao mesmo tempo. Para realizar a exclusão em massa, selecione apenas treinamentos de um mesmo estágio.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <div className="overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1931,12 +1996,12 @@ export default function EmployeeProfilePage() {
                                       </DialogContent>
                                     </Dialog>
 
-                                    {canEditDocuments && !training.id.startsWith("virtual-") && (
+                                    {canEditDocuments && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
                                         className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
-                                        onClick={() => handleSingleDeleteTraining(training.id)}
+                                        onClick={() => handleSingleDeleteTraining(training)}
                                       >
                                         <Trash2 className="size-4" />
                                       </Button>
@@ -1950,6 +2015,7 @@ export default function EmployeeProfilePage() {
                       </TableBody>
                     </Table>
                   </div>
+                  </>
                 ) : (
                   <p className="text-muted-foreground text-sm">
                     Nenhum treinamento cadastrado para este funcionário.
@@ -1969,9 +2035,23 @@ export default function EmployeeProfilePage() {
               <AlertCircle className="w-8 h-8" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-900">Confirmar Exclusão</h3>
+              <h3 className="text-lg font-bold text-slate-900">
+                {deleteTarget?.stage === "attachment"
+                  ? deleteTarget.type === "document"
+                    ? "Remover Documento Anexado"
+                    : "Remover Treinamento Anexado"
+                  : deleteTarget?.type === "document"
+                    ? "Excluir Linha do Documento"
+                    : "Excluir Linha do Treinamento"}
+              </h3>
               <p className="text-sm text-slate-500 mt-2">
-                Tem certeza de que deseja excluir permanentemente {deleteTarget?.ids.length === 1 ? "este item" : `${deleteTarget?.ids.length} itens selecionados`}? Esta ação não poderá ser desfeita.
+                {deleteTarget?.stage === "attachment"
+                  ? deleteTarget.ids.length === 1
+                    ? "Tem certeza de que deseja remover o documento anexado deste item? O arquivo será excluído e a linha voltará ao estágio inicial (sem documento), permanecendo na tabela para novo envio."
+                    : `Tem certeza de que deseja remover os documentos anexados de ${deleteTarget.ids.length} itens selecionados? Os arquivos serão excluídos e as linhas voltarão ao estágio inicial (sem documento), permanecendo na tabela para novo envio.`
+                  : deleteTarget?.ids.length === 1
+                    ? "Esta linha não possui documento anexado. Ao confirmar, a própria linha será excluída permanentemente deste colaborador, e não somente o documento anexado. Esta ação não poderá ser desfeita."
+                    : `Estas ${deleteTarget?.ids.length} linhas não possuem documentos anexados. Ao confirmar, as próprias linhas serão excluídas permanentemente deste colaborador, e não somente os documentos anexados. Esta ação não poderá ser desfeita.`}
               </p>
             </div>
             <div className="flex gap-3 w-full pt-2">
@@ -1992,13 +2072,21 @@ export default function EmployeeProfilePage() {
                   setLoading(true)
                   try {
                     if (deleteTarget.type === "document") {
-                      await deleteEmployeeDocuments(employee.id, deleteTarget.ids)
+                      await deleteEmployeeDocuments(employee.id, deleteTarget.ids, deleteTarget.stage)
                       setSelectedDocIds(prev => prev.filter(id => !deleteTarget.ids.includes(id)))
-                      toast.success("Documento(s) excluído(s) com sucesso")
+                      if (deleteTarget.stage === "attachment") {
+                        toast.success("Documento(s) anexado(s) removido(s) com sucesso. A linha voltou ao estágio inicial.")
+                      } else {
+                        toast.success("Linha(s) de documento excluída(s) com sucesso.")
+                      }
                     } else {
-                      await deleteEmployeeTrainings(employee.id, deleteTarget.ids)
+                      await deleteEmployeeTrainings(employee.id, deleteTarget.ids, deleteTarget.stage)
                       setSelectedTrainingIds(prev => prev.filter(id => !deleteTarget.ids.includes(id)))
-                      toast.success("Treinamento(s) excluído(s) com sucesso")
+                      if (deleteTarget.stage === "attachment") {
+                        toast.success("Treinamento(s) anexado(s) removido(s) com sucesso. A linha voltou ao estágio inicial.")
+                      } else {
+                        toast.success("Linha(s) de treinamento excluída(s) com sucesso.")
+                      }
                     }
                     setDeleteTarget(null)
                   } catch (error) {
@@ -2009,7 +2097,7 @@ export default function EmployeeProfilePage() {
                 }}
               >
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                Excluir
+                {deleteTarget?.stage === "attachment" ? "Remover Anexo(s)" : "Excluir Linha(s)"}
               </Button>
             </div>
           </div>

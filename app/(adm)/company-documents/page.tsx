@@ -11,9 +11,9 @@ import { useCompanyStore } from "@/stores/company"
 import { useUserStore } from "@/stores/user"
 import { useSnapshot } from "valtio"
 import { useEffect, useState, useRef } from "react"
-import { FileText, CheckCircle2, Clock, Upload, Loader2, Eye, Download, Pencil, Trash2, Save, Building2, AlertTriangle, Ban, Search, X, Filter } from "lucide-react"
+import { FileText, CheckCircle2, Clock, Upload, Loader2, Eye, Download, Pencil, Trash2, Save, Building2, AlertTriangle, Ban, Search, X, Filter, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile, getCompanyRequiredDocumentsAdmin, uploadImage, toggleCompanyDocStatus, deleteCompanyDoc } from "@/actions/requests"
+import { getCompanyDocuments, updateCompanyDocument, getCompanyData, downloadFile, getCompanyRequiredDocumentsAdmin, uploadImage, toggleCompanyDocStatus, deleteCompanyDocs } from "@/actions/requests"
 import { toast } from "sonner"
 import Link from "next/link"
 import { Dialog, DialogContent, DialogTrigger, DialogClose, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
@@ -21,6 +21,7 @@ import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
 import { SpyPageGuard } from "@/components/spy-page-guard"
 
 const COMPANY_DOCS = [
@@ -78,9 +79,25 @@ export default function CompanyDocumentsPage() {
 
   const [disabledDocs, setDisabledDocs] = useState<string[]>([])
   const [togglingDocType, setTogglingDocType] = useState<string | null>(null)
-  const [deletingDoc, setDeletingDoc] = useState<any | null>(null)
   const [deleteDocLoading, setDeleteDocLoading] = useState(false)
-  const [deleteDocDialogOpen, setDeleteDocDialogOpen] = useState(false)
+
+  // Estados de seleção independente por aba
+  const [selectedCompanyDocKeys, setSelectedCompanyDocKeys] = useState<string[]>([])
+  const [selectedLaborDocKeys, setSelectedLaborDocKeys] = useState<string[]>([])
+
+  // Modal unificado de deleção em 2 estágios
+  const [deleteTarget, setDeleteTarget] = useState<{
+    tabKey: "company" | "labor"
+    items: Array<{
+      type: string
+      label: string
+      isCustom?: boolean
+      docData?: any
+      itemKey: string
+    }>
+    stage: "attachment" | "row"
+  } | null>(null)
+
   const [searchQuery, setSearchQuery] = useState("")
   const [quickFilter, setQuickFilter] = useState<"ALL" | "PENDING" | "APPROVED" | "EXPIRED" | "IN_REVIEW" | "DISABLED">("ALL")
 
@@ -136,7 +153,6 @@ export default function CompanyDocumentsPage() {
 
     fetchCompanyData()
   }, [company_selected, router])
-
 
   const handleSelect = (fileList?: FileList | null) => {
     if (!verifyAction()) return
@@ -257,39 +273,53 @@ export default function CompanyDocumentsPage() {
     }
   }
 
-  const handleDeleteDocConfirm = async (deleteFileOnly = false, disableAfter = false) => {
+  // Execução de deleção em 2 estágios (individual ou lote)
+  const handleExecuteDelete = async () => {
     if (!verifyAction()) return
-    if (!deletingDoc) return
+    if (!deleteTarget) return
     const companyId = company_selected?.id || localStorage.getItem('company_id')
     if (!companyId) return
 
     setDeleteDocLoading(true)
     try {
-      await deleteCompanyDoc({
+      await deleteCompanyDocs({
         companyId,
-        documentId: deletingDoc.docData?.id,
-        type: deletingDoc.type,
-        name: deletingDoc.label,
-        isCustom: deletingDoc.isCustom,
-        deleteFileOnly,
-        disableAfterDelete: disableAfter
+        items: deleteTarget.items.map(i => ({
+          documentId: i.docData?.id,
+          type: i.type,
+          name: i.label,
+          isCustom: i.isCustom
+        })),
+        stage: deleteTarget.stage
       })
-      toast.success(deleteFileOnly ? "Arquivo excluído com sucesso!" : "Documento excluído com sucesso!")
-      setDeleteDocDialogOpen(false)
-      setDeletingDoc(null)
 
-      if (disableAfter && deletingDoc.type) {
-        setDisabledDocs(prev => [...prev.filter(t => t !== deletingDoc.type && t !== deletingDoc.label), deletingDoc.type])
+      const count = deleteTarget.items.length
+      if (deleteTarget.stage === "attachment") {
+        toast.success(count > 1 ? `${count} anexos excluídos com sucesso!` : "Arquivo excluído com sucesso!")
+      } else {
+        toast.success(count > 1 ? `${count} linhas excluídas com sucesso!` : "Linha excluída com sucesso!")
       }
 
-      const [updatedDocs, reqDocs] = await Promise.all([
+      if (deleteTarget.tabKey === "company") {
+        setSelectedCompanyDocKeys([])
+      } else {
+        setSelectedLaborDocKeys([])
+      }
+
+      setDeleteTarget(null)
+
+      const [updatedDocs, reqDocs, fullCompany] = await Promise.all([
         getCompanyDocuments(companyId),
-        getCompanyRequiredDocumentsAdmin(companyId)
+        getCompanyRequiredDocumentsAdmin(companyId),
+        getCompanyData(companyId)
       ])
       setDocuments(updatedDocs || [])
       setRequiredDocs(reqDocs || [])
+      if (fullCompany?.disabledDocuments) {
+        setDisabledDocs(fullCompany.disabledDocuments)
+      }
     } catch (error: any) {
-      toast.error(error?.response?.data?.error || "Erro ao excluir documento/arquivo")
+      toast.error(error?.response?.data?.error || "Erro ao excluir documento(s)")
     } finally {
       setDeleteDocLoading(false)
     }
@@ -349,7 +379,13 @@ export default function CompanyDocumentsPage() {
     )
   }
 
-  const renderDocumentTable = (docList: { type: string, label: string, isEnabled?: boolean, isCustom?: boolean }[], isAdditional?: boolean) => {
+  const renderDocumentTable = (
+    docList: { type: string, label: string, isEnabled?: boolean, isCustom?: boolean }[],
+    tabKey: "company" | "labor"
+  ) => {
+    const selectedKeys = tabKey === "company" ? selectedCompanyDocKeys : selectedLaborDocKeys
+    const setSelectedKeys = tabKey === "company" ? setSelectedCompanyDocKeys : setSelectedLaborDocKeys
+
     // Classificação completa dos documentos
     const docsWithStatus = docList.map(item => {
       const isCustom = item.isCustom || item.type === 'CUSTOM' || (!COMPANY_DOCS.some(d => d.type === item.type) && !LABOR_DOCS.some(d => d.type === item.type))
@@ -382,6 +418,8 @@ export default function CompanyDocumentsPage() {
         statusKey = "PENDING"
       }
 
+      const itemKey = docData?.id || (isCustom ? `custom-${item.type}-${item.label}` : item.type)
+
       return {
         ...item,
         isCustom,
@@ -392,7 +430,8 @@ export default function CompanyDocumentsPage() {
         isApproved,
         isRejected,
         isInReview,
-        statusKey
+        statusKey,
+        itemKey
       }
     })
 
@@ -419,7 +458,7 @@ export default function CompanyDocumentsPage() {
         if (!matches) return false
       }
 
-      if (quickFilter === "ALL") return true
+      if (quickFilter === "ALL") return item.active
       if (quickFilter === "APPROVED") return item.isApproved
       if (quickFilter === "PENDING") return item.active && !item.isApproved
       if (quickFilter === "EXPIRED") return item.active && item.isExpired
@@ -429,97 +468,138 @@ export default function CompanyDocumentsPage() {
       return true
     })
 
+    // Validação de seleção mista
+    const selectedDocs = docsWithStatus.filter(item => selectedKeys.includes(item.itemKey))
+    const hasAttachedDocs = selectedDocs.some(item => item.hasFile)
+    const hasEmptyDocs = selectedDocs.some(item => !item.hasFile)
+    const hasMixedStages = hasAttachedDocs && hasEmptyDocs
+
+    const allFilteredSelected = filteredDocs.length > 0 && filteredDocs.every(item => selectedKeys.includes(item.itemKey))
+
+    const handleToggleSelectAll = (checked: boolean) => {
+      if (checked) {
+        const keysToAdd = filteredDocs.map(d => d.itemKey)
+        setSelectedKeys(Array.from(new Set([...selectedKeys, ...keysToAdd])))
+      } else {
+        const keysToRemove = new Set(filteredDocs.map(d => d.itemKey))
+        setSelectedKeys(selectedKeys.filter(k => !keysToRemove.has(k)))
+      }
+    }
+
     return (
       <div className="space-y-4 md:space-y-6 w-full">
-        {!isAdditional && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-2">
-            <Card
-              onClick={() => setQuickFilter(quickFilter === "ALL" ? "ALL" : "ALL")}
-              className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-slate-300 hover:shadow-md transition-all ${
-                quickFilter === "ALL" ? "ring-2 ring-slate-400 bg-slate-50/40" : ""
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-2">
+          <Card
+            onClick={() => setQuickFilter(quickFilter === "ALL" ? "ALL" : "ALL")}
+            className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-slate-300 hover:shadow-md transition-all ${quickFilter === "ALL" ? "ring-2 ring-slate-400 bg-slate-50/40" : ""
               }`}
-            >
-              <div className="p-2 md:p-3 bg-slate-50 rounded-xl md:rounded-2xl shrink-0">
-                <FileText className="w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-wider">Obrigatórios</p>
-                <p className="text-sm md:text-xl font-black text-slate-700 leading-none mt-0.5 md:mt-1">{stats.total}</p>
-              </div>
-            </Card>
+          >
+            <div className="p-2 md:p-3 bg-slate-50 rounded-xl md:rounded-2xl shrink-0">
+              <FileText className="w-4 h-4 md:w-5 md:h-5 text-slate-400" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[9px] md:text-xs font-bold text-slate-400 uppercase tracking-wider">Obrigatórios</p>
+              <p className="text-sm md:text-xl font-black text-slate-700 leading-none mt-0.5 md:mt-1">{stats.total}</p>
+            </div>
+          </Card>
 
-            <Card
-              onClick={() => setQuickFilter(quickFilter === "APPROVED" ? "ALL" : "APPROVED")}
-              className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all ${
-                quickFilter === "APPROVED" ? "ring-2 ring-emerald-500 bg-emerald-50/20" : ""
+          <Card
+            onClick={() => setQuickFilter(quickFilter === "APPROVED" ? "ALL" : "APPROVED")}
+            className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-emerald-300 hover:shadow-md transition-all ${quickFilter === "APPROVED" ? "ring-2 ring-emerald-500 bg-emerald-50/20" : ""
               }`}
-            >
-              <div className="p-2 md:p-3 bg-emerald-50 rounded-xl md:rounded-2xl shrink-0">
-                <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-[9px] md:text-xs font-bold text-emerald-500 uppercase tracking-wider">Aprovados</p>
-                <p className="text-sm md:text-xl font-black text-emerald-700 leading-none mt-0.5 md:mt-1">{stats.approved}</p>
-              </div>
-            </Card>
+          >
+            <div className="p-2 md:p-3 bg-emerald-50 rounded-xl md:rounded-2xl shrink-0">
+              <CheckCircle2 className="w-4 h-4 md:w-5 md:h-5 text-emerald-500" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[9px] md:text-xs font-bold text-emerald-500 uppercase tracking-wider">Aprovados</p>
+              <p className="text-sm md:text-xl font-black text-emerald-700 leading-none mt-0.5 md:mt-1">{stats.approved}</p>
+            </div>
+          </Card>
 
-            <Card
-              onClick={() => setQuickFilter(quickFilter === "PENDING" ? "ALL" : "PENDING")}
-              className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-amber-300 hover:shadow-md transition-all ${
-                quickFilter === "PENDING" ? "ring-2 ring-amber-500 bg-amber-50/20" : ""
+          <Card
+            onClick={() => setQuickFilter(quickFilter === "PENDING" ? "ALL" : "PENDING")}
+            className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-amber-300 hover:shadow-md transition-all ${quickFilter === "PENDING" ? "ring-2 ring-amber-500 bg-amber-50/20" : ""
               }`}
-            >
-              <div className="p-2 md:p-3 bg-amber-50 rounded-xl md:rounded-2xl shrink-0">
-                <Clock className="w-4 h-4 md:w-5 md:h-5 text-amber-500" />
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-[9px] md:text-xs font-bold text-amber-500 uppercase tracking-wider">Pendentes</p>
-                <p className="text-sm md:text-xl font-black text-amber-700 leading-none mt-0.5 md:mt-1">{stats.pending}</p>
-              </div>
-            </Card>
+          >
+            <div className="p-2 md:p-3 bg-amber-50 rounded-xl md:rounded-2xl shrink-0">
+              <Clock className="w-4 h-4 md:w-5 md:h-5 text-amber-500" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[9px] md:text-xs font-bold text-amber-500 uppercase tracking-wider">Pendentes</p>
+              <p className="text-sm md:text-xl font-black text-amber-700 leading-none mt-0.5 md:mt-1">{stats.pending}</p>
+            </div>
+          </Card>
 
-            <Card
-              onClick={() => setQuickFilter(quickFilter === "DISABLED" ? "ALL" : "DISABLED")}
-              className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-slate-300 hover:shadow-md transition-all ${
-                quickFilter === "DISABLED" ? "ring-2 ring-slate-500 bg-slate-50/50" : ""
+          <Card
+            onClick={() => setQuickFilter(quickFilter === "DISABLED" ? "ALL" : "DISABLED")}
+            className={`rounded-2xl md:rounded-3xl border-slate-100 shadow-sm bg-white p-3 md:p-4 flex flex-col sm:flex-row items-center sm:items-start gap-2 md:gap-4 cursor-pointer hover:border-slate-300 hover:shadow-md transition-all ${quickFilter === "DISABLED" ? "ring-2 ring-slate-500 bg-slate-50/50" : ""
               }`}
-            >
-              <div className="p-2 md:p-3 bg-slate-100 rounded-xl md:rounded-2xl shrink-0">
-                <Ban className="w-4 h-4 md:w-5 md:h-5 text-slate-500" />
-              </div>
-              <div className="text-center sm:text-left">
-                <p className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Desabilitados</p>
-                <p className="text-sm md:text-xl font-black text-slate-600 leading-none mt-0.5 md:mt-1">{stats.disabled}</p>
-              </div>
-            </Card>
-          </div>
-        )}
+          >
+            <div className="p-2 md:p-3 bg-slate-100 rounded-xl md:rounded-2xl shrink-0">
+              <Ban className="w-4 h-4 md:w-5 md:h-5 text-slate-500" />
+            </div>
+            <div className="text-center sm:text-left">
+              <p className="text-[9px] md:text-xs font-bold text-slate-500 uppercase tracking-wider">Desabilitados</p>
+              <p className="text-sm md:text-xl font-black text-slate-600 leading-none mt-0.5 md:mt-1">{stats.disabled}</p>
+            </div>
+          </Card>
+        </div>
 
         <Card className="rounded-3xl p-0! md:rounded-[2.5rem] border-slate-100 shadow-sm overflow-hidden bg-white">
           <CardHeader className="bg-slate-50/50 border-b border-slate-100 p-4 sm:p-6 md:p-7 space-y-3.5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <CardTitle className="text-slate-800 text-base md:text-xl font-bold flex items-center gap-2">
-                <FileText className="w-5 h-5 text-emerald-600 animate-pulse" /> {isAdditional ? "Documentos Adicionais" : "Referência de Documentos"}
+                <FileText className="w-5 h-5 text-emerald-600 animate-pulse" />
+                {tabKey === "company" ? "Documentos Corporativos" : "Obrigações Trabalhistas"}
               </CardTitle>
 
-              {/* Barra de busca rápida */}
-              <div className="relative w-full sm:w-72">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <Input
-                  placeholder="Buscar documento..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-8 h-9 text-xs rounded-xl bg-white border-slate-200 focus-visible:ring-emerald-500"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Botão de Exclusão em Massa */}
+                {selectedKeys.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={hasMixedStages || deleteDocLoading || !hasEditPermission()}
+                    onClick={() => {
+                      if (!verifyAction()) return
+                      setDeleteTarget({
+                        tabKey,
+                        items: selectedDocs,
+                        stage: hasAttachedDocs ? "attachment" : "row"
+                      })
+                    }}
+                    className="h-9 px-3.5 rounded-xl font-bold text-xs gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                    title={hasMixedStages ? "Desmarque um dos estágios para habilitar a exclusão" : ""}
                   >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {hasMixedStages
+                      ? "Seleção Mista (Bloqueado)"
+                      : hasAttachedDocs
+                        ? `Deletar Anexos (${selectedKeys.length})`
+                        : `Excluir Linhas (${selectedKeys.length})`}
+                  </Button>
                 )}
+
+                {/* Barra de busca rápida */}
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <Input
+                    placeholder="Buscar documento..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-9 pr-8 h-9 text-xs rounded-xl bg-white border-slate-200 focus-visible:ring-emerald-500"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -532,34 +612,30 @@ export default function CompanyDocumentsPage() {
               <button
                 type="button"
                 onClick={() => setQuickFilter("ALL")}
-                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                  quickFilter === "ALL"
-                    ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
+                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "ALL"
+                  ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                  }`}
               >
                 Todos
-                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                  quickFilter === "ALL" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-500"
-                }`}>
-                  {docList.length}
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "ALL" ? "bg-slate-800 text-slate-200" : "bg-slate-100 text-slate-500"
+                  }`}>
+                  {stats.total}
                 </span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setQuickFilter(quickFilter === "PENDING" ? "ALL" : "PENDING")}
-                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                  quickFilter === "PENDING"
-                    ? "bg-amber-600 text-white border-amber-600 shadow-xs"
-                    : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
-                }`}
+                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "PENDING"
+                  ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                  : "bg-white text-amber-700 border-amber-200 hover:bg-amber-50"
+                  }`}
               >
                 <Clock className="w-3 h-3" />
                 Pendentes
-                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                  quickFilter === "PENDING" ? "bg-amber-700 text-white" : "bg-amber-100 text-amber-800"
-                }`}>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "PENDING" ? "bg-amber-700 text-white" : "bg-amber-100 text-amber-800"
+                  }`}>
                   {stats.pending}
                 </span>
               </button>
@@ -567,17 +643,15 @@ export default function CompanyDocumentsPage() {
               <button
                 type="button"
                 onClick={() => setQuickFilter(quickFilter === "APPROVED" ? "ALL" : "APPROVED")}
-                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                  quickFilter === "APPROVED"
-                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                    : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-                }`}
+                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "APPROVED"
+                  ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                  : "bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                  }`}
               >
                 <CheckCircle2 className="w-3 h-3" />
                 Aprovados
-                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                  quickFilter === "APPROVED" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800"
-                }`}>
+                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "APPROVED" ? "bg-emerald-700 text-white" : "bg-emerald-100 text-emerald-800"
+                  }`}>
                   {stats.approved}
                 </span>
               </button>
@@ -586,17 +660,15 @@ export default function CompanyDocumentsPage() {
                 <button
                   type="button"
                   onClick={() => setQuickFilter(quickFilter === "EXPIRED" ? "ALL" : "EXPIRED")}
-                  className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    quickFilter === "EXPIRED"
-                      ? "bg-red-600 text-white border-red-600 shadow-xs"
-                      : "bg-white text-red-700 border-red-200 hover:bg-red-50"
-                  }`}
+                  className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "EXPIRED"
+                    ? "bg-red-600 text-white border-red-600 shadow-xs"
+                    : "bg-white text-red-700 border-red-200 hover:bg-red-50"
+                    }`}
                 >
                   <AlertTriangle className="w-3 h-3" />
                   Vencidos
-                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                    quickFilter === "EXPIRED" ? "bg-red-700 text-white" : "bg-red-100 text-red-800"
-                  }`}>
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "EXPIRED" ? "bg-red-700 text-white" : "bg-red-100 text-red-800"
+                    }`}>
                     {stats.expired}
                   </span>
                 </button>
@@ -606,39 +678,37 @@ export default function CompanyDocumentsPage() {
                 <button
                   type="button"
                   onClick={() => setQuickFilter(quickFilter === "IN_REVIEW" ? "ALL" : "IN_REVIEW")}
-                  className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                    quickFilter === "IN_REVIEW"
-                      ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                      : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
-                  }`}
+                  className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "IN_REVIEW"
+                    ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                    : "bg-white text-blue-700 border-blue-200 hover:bg-blue-50"
+                    }`}
                 >
                   <FileText className="w-3 h-3" />
                   Em análise
-                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                    quickFilter === "IN_REVIEW" ? "bg-blue-700 text-white" : "bg-blue-100 text-blue-800"
-                  }`}>
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "IN_REVIEW" ? "bg-blue-700 text-white" : "bg-blue-100 text-blue-800"
+                    }`}>
                     {stats.inReview}
                   </span>
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setQuickFilter(quickFilter === "DISABLED" ? "ALL" : "DISABLED")}
-                className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${
-                  quickFilter === "DISABLED"
+              {stats.disabled > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setQuickFilter(quickFilter === "DISABLED" ? "ALL" : "DISABLED")}
+                  className={`px-2.5 py-1 rounded-xl font-bold text-[11px] transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border ${quickFilter === "DISABLED"
                     ? "bg-slate-700 text-white border-slate-700 shadow-xs"
                     : "bg-white text-slate-500 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                <Ban className="w-3 h-3" />
-                Desabilitados
-                <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${
-                  quickFilter === "DISABLED" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
-                }`}>
-                  {stats.disabled}
-                </span>
-              </button>
+                    }`}
+                >
+                  <Ban className="w-3 h-3" />
+                  Desabilitados
+                  <span className={`text-[9px] px-1.5 py-0.2 rounded font-semibold ${quickFilter === "DISABLED" ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                    {stats.disabled}
+                  </span>
+                </button>
+              )}
 
               {(quickFilter !== "ALL" || searchQuery) && (
                 <button
@@ -651,6 +721,21 @@ export default function CompanyDocumentsPage() {
               )}
             </div>
           </CardHeader>
+
+          {/* Banner de Aviso de Seleção Mista */}
+          {hasMixedStages && (
+            <div className="mx-4 sm:mx-6 md:mx-8 my-4 flex items-center gap-3 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm animate-in fade-in duration-200">
+              <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div className="flex-1">
+                <p className="font-bold">Aviso de seleção mista</p>
+                <p className="text-[11px] sm:text-xs text-amber-700">
+                  Você selecionou documentos com arquivo anexado e itens sem anexo simultaneamente.
+                  Não é permitido realizar a exclusão de estágios diferentes ao mesmo tempo. Desmarque um dos grupos para prosseguir.
+                </p>
+              </div>
+            </div>
+          )}
+
           <CardContent className="p-0 px-4 sm:px-6 md:px-8">
             {docsLoading ? (
               <div className="p-6 space-y-4">
@@ -664,18 +749,26 @@ export default function CompanyDocumentsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12 pl-6 pr-2">
+                          <Checkbox
+                            checked={allFilteredSelected}
+                            onCheckedChange={(checked) => handleToggleSelectAll(!!checked)}
+                            aria-label="Selecionar todos os documentos"
+                            className="rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                          />
+                        </TableHead>
                         <TableHead>Documento</TableHead>
                         <TableHead className="w-36! text-center">Status</TableHead>
                         <TableHead className="w-32! text-center">Obrigatório</TableHead>
                         <TableHead className="w-36! text-center">Data de emissão</TableHead>
                         <TableHead className="w-36! text-center">Vencimento</TableHead>
-                        <TableHead className="text-right">Ação</TableHead>
+                        <TableHead className="text-right pr-6">Ação</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredDocs.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={6} className="text-center py-12">
+                          <TableCell colSpan={7} className="text-center py-12">
                             <div className="flex flex-col items-center justify-center gap-2">
                               <FileText className="w-8 h-8 text-slate-300" />
                               <p className="text-sm font-semibold text-slate-600">Nenhum documento encontrado</p>
@@ -688,9 +781,24 @@ export default function CompanyDocumentsPage() {
                             </div>
                           </TableCell>
                         </TableRow>
-                      ) : filteredDocs.map(({ type, label, isEnabled, isCustom, docData, active }) => {
-                          return (
-                          <TableRow key={type + label} className={active ? "hover:bg-slate-50/50 transition-colors" : "opacity-60 bg-slate-50/40 hover:opacity-90 hover:bg-slate-50 transition-all"}>
+                      ) : filteredDocs.map((item) => {
+                        const { type, label, isCustom, docData, active, hasFile, itemKey } = item
+                        return (
+                          <TableRow key={itemKey} className={active ? "hover:bg-slate-50/50 transition-colors" : "opacity-60 bg-slate-50/40 hover:opacity-90 hover:bg-slate-50 transition-all"}>
+                            <TableCell className="w-12 pl-6 pr-2">
+                              <Checkbox
+                                checked={selectedKeys.includes(itemKey)}
+                                onCheckedChange={(checked) => {
+                                  if (checked) {
+                                    setSelectedKeys([...selectedKeys, itemKey])
+                                  } else {
+                                    setSelectedKeys(selectedKeys.filter(k => k !== itemKey))
+                                  }
+                                }}
+                                aria-label={`Selecionar ${label}`}
+                                className="rounded-md border-slate-300 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                              />
+                            </TableCell>
                             <TableCell className="font-medium text-slate-700 max-w-[240px]">
                               <div className="flex items-center gap-2">
                                 <span className={`truncate ${!active ? "line-through text-slate-400" : ""}`} title={label}>{label}</span>
@@ -721,7 +829,7 @@ export default function CompanyDocumentsPage() {
                             <TableCell className="text-center text-slate-500 font-bold tabular-nums text-xs">
                               {docData?.expiresAt ? new Date(docData.expiresAt).toLocaleDateString("pt-BR", { timeZone: 'UTC' }) : "—"}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right pr-6">
                               <div className="flex items-center justify-end gap-1">
                                 {docData?.fileUrl && (
                                   <>
@@ -862,23 +970,26 @@ export default function CompanyDocumentsPage() {
                                   </DialogContent>
                                 </Dialog>
 
+                                {/* Botão de Exclusão (2 Estágios) */}
                                 <Button
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => {
                                     if (!verifyAction()) return
-                                    setDeletingDoc({
-                                      docData,
-                                      type,
-                                      label,
-                                      isCustom,
-                                      hasFile: !!docData?.fileUrl,
-                                      isEnabled: active
+                                    setDeleteTarget({
+                                      tabKey,
+                                      items: [{
+                                        type,
+                                        label,
+                                        isCustom,
+                                        docData,
+                                        itemKey
+                                      }],
+                                      stage: hasFile ? "attachment" : "row"
                                     })
-                                    setDeleteDocDialogOpen(true)
                                   }}
                                   className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
-                                  title={docData?.fileUrl ? "Excluir arquivo" : isCustom ? "Excluir documento" : "Desabilitar documento"}
+                                  title={hasFile ? "Excluir arquivo anexado" : "Excluir linha do documento"}
                                 >
                                   <Trash2 className="size-4" />
                                 </Button>
@@ -904,17 +1015,32 @@ export default function CompanyDocumentsPage() {
                         </Button>
                       )}
                     </div>
-                  ) : filteredDocs.map(({ type, label, isEnabled, isCustom, docData, active }) => {
-                      return (
-                      <div key={type + label} className={`border rounded-2xl p-4 space-y-3.5 transition-all ${active ? "bg-slate-50/50 border-slate-100 hover:bg-slate-50/80" : "bg-slate-50/30 border-slate-200/50 opacity-60 hover:opacity-90"}`}>
+                  ) : filteredDocs.map((item) => {
+                    const { type, label, isCustom, docData, active, hasFile, itemKey } = item
+                    return (
+                      <div key={itemKey} className={`border rounded-2xl p-4 space-y-3.5 transition-all ${active ? "bg-slate-50/50 border-slate-100 hover:bg-slate-50/80" : "bg-slate-50/30 border-slate-200/50 opacity-60 hover:opacity-90"}`}>
                         <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <h4 className={`text-xs font-bold leading-snug break-words ${active ? "text-slate-800" : "line-through text-slate-400"}`}>
-                              {label}
-                            </h4>
-                            {isCustom && (
-                              <span className="text-[9px] px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded font-medium mt-1 inline-block">Adicional</span>
-                            )}
+                          <div className="flex items-start gap-2.5 flex-1 min-w-0">
+                            <Checkbox
+                              checked={selectedKeys.includes(itemKey)}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setSelectedKeys([...selectedKeys, itemKey])
+                                } else {
+                                  setSelectedKeys(selectedKeys.filter(k => k !== itemKey))
+                                }
+                              }}
+                              aria-label={`Selecionar ${label}`}
+                              className="rounded-md border-slate-300 mt-0.5 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600 shrink-0"
+                            />
+                            <div>
+                              <h4 className={`text-xs font-bold leading-snug break-words ${active ? "text-slate-800" : "line-through text-slate-400"}`}>
+                                {label}
+                              </h4>
+                              {isCustom && (
+                                <span className="text-[9px] px-1.5 py-0.2 bg-slate-100 text-slate-600 rounded font-medium mt-1 inline-block">Adicional</span>
+                              )}
+                            </div>
                           </div>
                           {getDocStatusBadge(docData, active, true)}
                         </div>
@@ -1087,18 +1213,20 @@ export default function CompanyDocumentsPage() {
                               size="sm"
                               onClick={() => {
                                 if (!verifyAction()) return
-                                setDeletingDoc({
-                                  docData,
-                                  type,
-                                  label,
-                                  isCustom,
-                                  hasFile: !!docData?.fileUrl,
-                                  isEnabled: active
+                                setDeleteTarget({
+                                  tabKey,
+                                  items: [{
+                                    type,
+                                    label,
+                                    isCustom,
+                                    docData,
+                                    itemKey
+                                  }],
+                                  stage: hasFile ? "attachment" : "row"
                                 })
-                                setDeleteDocDialogOpen(true)
                               }}
                               className="size-8 p-0 cursor-pointer rounded-lg hover:bg-red-50 hover:text-red-600 text-slate-400"
-                              title={docData?.fileUrl ? "Excluir arquivo" : isCustom ? "Excluir documento" : "Desabilitar documento"}
+                              title={hasFile ? "Excluir arquivo anexado" : "Excluir linha do documento"}
                             >
                               <Trash2 className="size-4" />
                             </Button>
@@ -1174,6 +1302,14 @@ export default function CompanyDocumentsPage() {
         label: r.name,
         isCustom: true,
         isEnabled: isDocEnabled({ type: r.id, label: r.name, isCustom: true })
+      })),
+    ...documents
+      .filter(d => d.type === 'CUSTOM' && !LABOR_DOCS.some(ld => ld.label === d.name) && !requiredDocs.some(r => r.name === d.name))
+      .map(d => ({
+        type: 'CUSTOM',
+        label: d.name,
+        isCustom: true,
+        isEnabled: isDocEnabled({ type: 'CUSTOM', label: d.name, isCustom: true })
       }))
   ]
 
@@ -1186,10 +1322,9 @@ export default function CompanyDocumentsPage() {
   return (
     <AppLayout>
       <SpyPageGuard page="company-documents" action="view">
-        <div className="w-full max-w-7xl mx-auto md:p-8 space-y-6">
+        <div className="w-full mx-auto space-y-6">
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
-              <Building2 className="w-7 h-7 text-emerald-600" />
+            <h1 className="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-2">
               Documentos da Empresa
             </h1>
             <p className="text-sm text-slate-500">
@@ -1208,105 +1343,79 @@ export default function CompanyDocumentsPage() {
             </TabsList>
 
             <TabsContent value="company-docs" className="space-y-8 focus-visible:outline-none">
-              {renderDocumentTable(sortedCompanyDocs)}
+              {renderDocumentTable(sortedCompanyDocs, "company")}
             </TabsContent>
 
             <TabsContent value="labor-docs" className="focus-visible:outline-none">
-              {renderDocumentTable(sortedLaborDocs)}
+              {renderDocumentTable(sortedLaborDocs, "labor")}
             </TabsContent>
           </Tabs>
         </div>
 
-        {/* Modal de Confirmação de Exclusão ou Desativação */}
-        <Dialog open={deleteDocDialogOpen} onOpenChange={(open) => { if (!deleteDocLoading) setDeleteDocDialogOpen(open) }}>
-          <DialogContent className="rounded-3xl max-w-md">
+        {/* Modal de Confirmação de Exclusão (Dois Estágios) */}
+        <Dialog open={deleteTarget !== null} onOpenChange={(open) => { if (!deleteDocLoading && !open) setDeleteTarget(null) }}>
+          <DialogContent className="rounded-3xl max-w-md bg-white">
             <DialogHeader>
               <div className="mx-auto w-12 h-12 rounded-2xl bg-red-100 flex items-center justify-center text-red-600 mb-2">
                 <AlertTriangle className="w-6 h-6" />
               </div>
               <DialogTitle className="text-xl font-bold text-center text-slate-900">
-                {deletingDoc?.hasFile ? "Excluir Arquivo do Documento" : deletingDoc?.isCustom ? "Excluir Documento" : "Desabilitar Documento"}
+                {deleteTarget?.stage === "attachment"
+                  ? ((deleteTarget?.items.length || 0) > 1 ? "Excluir Anexos Selecionados" : "Excluir Arquivo do Documento")
+                  : ((deleteTarget?.items.length || 0) > 1 ? "Excluir Linhas Selecionadas" : "Excluir Linha do Documento")}
               </DialogTitle>
               <DialogDescription asChild>
                 <div className="text-center text-slate-600 space-y-3 mt-2 text-sm">
-                  <p>
-                    Documento: <strong className="text-slate-900">{deletingDoc?.label}</strong>
-                  </p>
+                  {deleteTarget?.items.length === 1 ? (
+                    <p>
+                      Documento: <strong className="text-slate-900">{deleteTarget.items[0]?.label}</strong>
+                    </p>
+                  ) : (
+                    <p>
+                      Você selecionou <strong className="text-slate-900">{deleteTarget?.items.length} itens</strong> para exclusão.
+                    </p>
+                  )}
 
-                  {deletingDoc?.hasFile ? (
+                  {deleteTarget?.stage === "attachment" ? (
                     <div className="p-3 bg-red-50/80 border border-red-200 rounded-2xl text-xs text-red-900 text-left space-y-1.5">
                       <p className="font-bold flex items-center gap-1.5 text-red-800">
                         <Trash2 className="w-3.5 h-3.5 shrink-0" />
-                        O arquivo será expurgado do Cloudflare R2.
+                        O arquivo será expurgado permanentemente do Cloudflare R2.
                       </p>
                       <p className="text-[11px] text-red-700">
-                        Você pode optar por remover apenas o arquivo (o documento voltará a ser pendente) ou remover o arquivo e desabilitar o documento (para que não fique como pendência).
+                        O documento retornará ao estágio inicial (pendente de envio), mantendo a linha na tabela de conformidade.
                       </p>
                     </div>
-                  ) : deletingDoc?.isCustom ? (
-                    <p className="text-xs text-slate-500">
-                      Este documento adicional será removido permanentemente da lista de obrigações da empresa.
-                    </p>
                   ) : (
-                    <p className="text-xs text-slate-500">
-                      Este documento deixará de ser obrigatório para esta empresa, será movido para o final da lista e não constará mais como pendência.
-                    </p>
+                    <div className="p-3 bg-red-50/80 border border-red-200 rounded-2xl text-xs text-red-900 text-left space-y-1.5">
+                      <p className="font-bold flex items-center gap-1.5 text-red-800">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        A linha será completamente removida.
+                      </p>
+                      <p className="text-[11px] text-red-700">
+                        Como não há arquivo anexado, esta operação removerá completamente {deleteTarget?.items.length === 1 ? "esta linha" : "estas linhas"} da lista de requisitos da empresa.
+                      </p>
+                    </div>
                   )}
                 </div>
               </DialogDescription>
             </DialogHeader>
 
             <DialogFooter className="flex-col sm:flex-col gap-2 mt-3">
-              {deletingDoc?.hasFile && (
-                <>
-                  <Button
-                    onClick={() => handleDeleteDocConfirm(true, false)}
-                    disabled={deleteDocLoading}
-                    className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl w-full cursor-pointer gap-2"
-                  >
-                    {deleteDocLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    Excluir Arquivo (Manter Documento)
-                  </Button>
-                  <Button
-                    onClick={() => handleDeleteDocConfirm(true, true)}
-                    disabled={deleteDocLoading}
-                    variant="outline"
-                    className="border-red-200 text-red-700 hover:bg-red-50 font-bold rounded-xl w-full cursor-pointer gap-2"
-                  >
-                    <Ban className="w-4 h-4" />
-                    Excluir Arquivo e Desabilitar Documento
-                  </Button>
-                </>
-              )}
-
-              {!deletingDoc?.hasFile && deletingDoc?.isCustom && (
-                <Button
-                  onClick={() => handleDeleteDocConfirm(false, false)}
-                  disabled={deleteDocLoading}
-                  className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl w-full cursor-pointer gap-2"
-                >
-                  {deleteDocLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  Sim, Excluir Documento
-                </Button>
-              )}
-
-              {!deletingDoc?.hasFile && !deletingDoc?.isCustom && (
-                <Button
-                  onClick={() => {
-                    handleToggleDocStatus(deletingDoc.type, true, deletingDoc.label, false)
-                    setDeleteDocDialogOpen(false)
-                  }}
-                  disabled={deleteDocLoading}
-                  className="bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl w-full cursor-pointer gap-2"
-                >
-                  <Ban className="w-4 h-4" />
-                  Sim, Desabilitar Documento
-                </Button>
-              )}
+              <Button
+                onClick={handleExecuteDelete}
+                disabled={deleteDocLoading}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl w-full cursor-pointer gap-2"
+              >
+                {deleteDocLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {deleteTarget?.stage === "attachment"
+                  ? ((deleteTarget?.items.length || 0) > 1 ? `Confirmar Exclusão de ${deleteTarget?.items.length} Anexos` : "Sim, Excluir Anexo (Manter Linha)")
+                  : ((deleteTarget?.items.length || 0) > 1 ? `Confirmar Exclusão de ${deleteTarget?.items.length} Linhas` : "Sim, Excluir Linha Permanentemente")}
+              </Button>
 
               <Button
                 variant="ghost"
-                onClick={() => setDeleteDocDialogOpen(false)}
+                onClick={() => setDeleteTarget(null)}
                 disabled={deleteDocLoading}
                 className="rounded-xl w-full cursor-pointer text-slate-500"
               >
@@ -1319,4 +1428,3 @@ export default function CompanyDocumentsPage() {
     </AppLayout>
   )
 }
-

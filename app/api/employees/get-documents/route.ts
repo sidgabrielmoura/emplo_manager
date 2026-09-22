@@ -35,13 +35,17 @@ export async function POST(req: NextRequest) {
 
         await updateExpiredStatuses(employee.companyId)
 
-        const [documents, requirements] = await Promise.all([
+        const [documents, deletedDocuments, requirements] = await Promise.all([
             db.document.findMany({
                 where: { employeeId: employeeId, deletedAt: null },
                 orderBy: [
                     { position: "asc" },
                     { createdAt: "asc" }
                 ]
+            }),
+            db.document.findMany({
+                where: { employeeId: employeeId, deletedAt: { not: null } },
+                select: { name: true, type: true }
             }),
             db.companyRequiredDocument.findMany({
                 where: { companyId: employee.companyId, target: "EMPLOYEE_DOC", isEnabled: true },
@@ -51,29 +55,6 @@ export async function POST(req: NextRequest) {
                 ]
             })
         ])
-
-        // Normalize employee documents positions in database if any is 0 or duplicates exist
-        const docPositions = documents.map(d => d.position)
-        const hasDocZeroOrDuplicates = docPositions.some(p => p === 0) || new Set(docPositions).size !== docPositions.length
-        if (hasDocZeroOrDuplicates && documents.length > 0) {
-            await db.$transaction(
-                documents.map((doc, idx) =>
-                    db.document.update({
-                        where: { id: doc.id },
-                        data: { position: idx + 1 }
-                    })
-                )
-            )
-            // Re-fetch documents
-            documents.length = 0
-            documents.push(...(await db.document.findMany({
-                where: { employeeId: employeeId, deletedAt: null },
-                orderBy: [
-                    { position: "asc" },
-                    { createdAt: "asc" }
-                ]
-            })))
-        }
 
         // Normalize company required documents positions in database if any is 0 or duplicates exist
         const reqPositions = requirements.map(r => r.position)
@@ -87,22 +68,27 @@ export async function POST(req: NextRequest) {
                     })
                 )
             )
-            // Re-fetch requirements
-            requirements.length = 0
-            requirements.push(...(await db.companyRequiredDocument.findMany({
-                where: { companyId: employee.companyId, target: "EMPLOYEE_DOC", isEnabled: true },
-                orderBy: [
-                    { position: "asc" },
-                    { createdAt: "asc" }
-                ]
-            })))
+            requirements.forEach((req, idx) => {
+                req.position = idx + 1
+            })
         }
+
+        // Map document position to matching requirement position if doc.position is 0
+        documents.forEach(doc => {
+            if (!doc.position || doc.position <= 0) {
+                const req = requirements.find(r => r.name === doc.name)
+                if (req && req.position > 0) {
+                    doc.position = req.position
+                }
+            }
+        })
 
         const mergedDocuments = [...documents]
 
         requirements.forEach(req => {
             const exists = documents.find(d => d.type === "CUSTOM" && d.name === req.name)
-            if (!exists) {
+            const wasDeleted = deletedDocuments.some(d => d.type === "CUSTOM" && d.name === req.name)
+            if (!exists && !wasDeleted) {
                 mergedDocuments.push({
                     id: `virtual-${req.id}`,
                     type: "CUSTOM",
@@ -121,12 +107,36 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        // Sort deterministically: primary by position, secondary by name (never by createdAt)
         mergedDocuments.sort((a, b) => {
             const posA = a.position ?? 0
             const posB = b.position ?? 0
             if (posA !== posB) return posA - posB
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            const nameComp = (a.name || "").localeCompare(b.name || "", "pt-BR")
+            if (nameComp !== 0) return nameComp
+            return (a.id || "").localeCompare(b.id || "")
         })
+
+        // Ensure 1-based sequential positions (1..N) and persist DB docs if position changed
+        const updatesToPersist: Promise<any>[] = []
+        mergedDocuments.forEach((item, idx) => {
+            const correctPosition = idx + 1
+            if (item.position !== correctPosition) {
+                item.position = correctPosition
+                if (!item.id.startsWith("virtual-")) {
+                    updatesToPersist.push(
+                        db.document.update({
+                            where: { id: item.id },
+                            data: { position: correctPosition }
+                        })
+                    )
+                }
+            }
+        })
+
+        if (updatesToPersist.length > 0) {
+            await Promise.all(updatesToPersist)
+        }
 
         return NextResponse.json(mergedDocuments)
     } catch (error) {

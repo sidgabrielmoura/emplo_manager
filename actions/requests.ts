@@ -1220,7 +1220,7 @@ export async function addEmployeeDocument(payload: { employeeId: string; name: s
     }
 }
 
-export async function toggleEmployeeDocumentStatus(payload: { employeeId: string; documentId: string; isEnabled: boolean }) {
+export async function toggleEmployeeDocumentStatus(payload: { employeeId: string; documentId: string; isEnabled: boolean; position?: number }) {
     try {
         const { data } = await axios.put(
             '/employees/toggle-document-status',
@@ -1310,7 +1310,7 @@ export async function addEmployeeTraining(payload: { employeeId: string; name: s
     }
 }
 
-export async function toggleEmployeeTrainingStatus(payload: { employeeId: string; trainingId: string; isEnabled: boolean }) {
+export async function toggleEmployeeTrainingStatus(payload: { employeeId: string; trainingId: string; isEnabled: boolean; position?: number }) {
     try {
         const { data } = await axios.put(
             '/employees/toggle-training-status',
@@ -1324,11 +1324,11 @@ export async function toggleEmployeeTrainingStatus(payload: { employeeId: string
     }
 }
 
-export async function deleteEmployeeDocuments(employeeId: string, ids: string[]) {
+export async function deleteEmployeeDocuments(employeeId: string, ids: string[], stage?: "attachment" | "row") {
     try {
         const { data } = await axios.post(
             '/employees/delete-documents',
-            { employeeId, ids },
+            { employeeId, ids, stage },
             { baseURL: base_url }
         )
         await getDocsOfEmployee(employeeId)
@@ -1338,11 +1338,11 @@ export async function deleteEmployeeDocuments(employeeId: string, ids: string[])
     }
 }
 
-export async function deleteEmployeeTrainings(employeeId: string, ids: string[]) {
+export async function deleteEmployeeTrainings(employeeId: string, ids: string[], stage?: "attachment" | "row") {
     try {
         const { data } = await axios.post(
             '/employees/delete-trainings',
-            { employeeId, ids },
+            { employeeId, ids, stage },
             { baseURL: base_url }
         )
         await getTrainings(employeeId)
@@ -1352,11 +1352,11 @@ export async function deleteEmployeeTrainings(employeeId: string, ids: string[])
     }
 }
 
-export async function swapEmployeeDocuments(employeeId: string, id1: string, id2: string) {
+export async function swapEmployeeDocuments(employeeId: string, id1: string, id2: string, pos1?: number, pos2?: number) {
     try {
         const { data } = await axios.post(
             '/employees/swap-documents',
-            { employeeId, id1, id2 },
+            { employeeId, id1, id2, pos1, pos2 },
             { baseURL: base_url }
         )
         await getDocsOfEmployee(employeeId)
@@ -1366,11 +1366,11 @@ export async function swapEmployeeDocuments(employeeId: string, id1: string, id2
     }
 }
 
-export async function swapEmployeeTrainings(employeeId: string, id1: string, id2: string) {
+export async function swapEmployeeTrainings(employeeId: string, id1: string, id2: string, pos1?: number, pos2?: number) {
     try {
         const { data } = await axios.post(
             '/employees/swap-trainings',
-            { employeeId, id1, id2 },
+            { employeeId, id1, id2, pos1, pos2 },
             { baseURL: base_url }
         )
         await getTrainings(employeeId)
@@ -1721,3 +1721,27 @@ export async function deleteCompanyDoc(payload: {
         throw error
     }
 }
+
+export async function deleteCompanyDocs(payload: {
+    companyId: string,
+    items: Array<{
+        documentId?: string,
+        type?: string,
+        name?: string,
+        isCustom?: boolean
+    }>,
+    stage: "attachment" | "row"
+}) {
+    try {
+        const { data } = await axios.post(
+            `/company-documents/delete`,
+            payload,
+            { baseURL: base_url }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteCompanyDocs error:", error)
+        throw error
+    }
+}
+

@@ -8,7 +8,7 @@ export async function POST(req: NextRequest) {
         if (!userId) return unauthorizedResponse()
 
         const body = await req.json()
-        const { employeeId, id1, id2 } = body
+        const { employeeId, id1, id2, pos1, pos2 } = body
 
         if (!employeeId || !id1 || !id2) {
             return NextResponse.json({ error: "Parâmetros inválidos" }, { status: 400 })
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
         const hasAccess = await validateCompanyAccess(userId, employee.companyId)
         if (!hasAccess) return forbiddenResponse()
 
-        const getOrUpsertDocument = async (docId: string) => {
+        const getOrUpsertDocument = async (docId: string, fallbackPos?: number) => {
             if (docId.startsWith("virtual-")) {
                 const reqId = docId.replace("virtual-", "")
                 const requirement = await db.companyRequiredDocument.findUnique({
@@ -46,6 +46,10 @@ export async function POST(req: NextRequest) {
 
                 if (existing) return existing
 
+                const initialPosition = fallbackPos && fallbackPos > 0 
+                    ? fallbackPos 
+                    : (requirement.position > 0 ? requirement.position : 1)
+
                 return await db.document.create({
                     data: {
                         employeeId,
@@ -53,7 +57,7 @@ export async function POST(req: NextRequest) {
                         name: requirement.name,
                         status: "PENDING",
                         isEnabled: true,
-                        position: requirement.position
+                        position: initialPosition
                     }
                 })
             }
@@ -65,48 +69,20 @@ export async function POST(req: NextRequest) {
             return doc
         }
 
-        const doc1 = await getOrUpsertDocument(id1)
-        const doc2 = await getOrUpsertDocument(id2)
+        const doc1 = await getOrUpsertDocument(id1, pos1)
+        const doc2 = await getOrUpsertDocument(id2, pos2)
 
-        const allDocs = await db.document.findMany({
-            where: { employeeId, deletedAt: null },
-            orderBy: [
-                { position: "asc" },
-                { createdAt: "asc" }
-            ]
-        })
+        const p1 = typeof pos1 === "number" && pos1 > 0 ? pos1 : doc1.position
+        const p2 = typeof pos2 === "number" && pos2 > 0 ? pos2 : doc2.position
 
-        const positions = allDocs.map(d => d.position)
-        const hasDuplicatesOrZeros = positions.some(p => p === 0) || new Set(positions).size !== positions.length
-
-        let finalDoc1 = doc1
-        let finalDoc2 = doc2
-
-        if (hasDuplicatesOrZeros) {
-            await db.$transaction(
-                allDocs.map((doc, idx) => 
-                    db.document.update({
-                        where: { id: doc.id },
-                        data: { position: idx + 1 }
-                    })
-                )
-            )
-
-            const updatedDoc1 = await db.document.findUnique({ where: { id: doc1.id } })
-            const updatedDoc2 = await db.document.findUnique({ where: { id: doc2.id } })
-            if (updatedDoc1) finalDoc1 = updatedDoc1
-            if (updatedDoc2) finalDoc2 = updatedDoc2
-        }
-
-        const tempPos = finalDoc1.position
         await db.$transaction([
             db.document.update({
-                where: { id: finalDoc1.id },
-                data: { position: finalDoc2.position }
+                where: { id: doc1.id },
+                data: { position: p2 }
             }),
             db.document.update({
-                where: { id: finalDoc2.id },
-                data: { position: tempPos }
+                where: { id: doc2.id },
+                data: { position: p1 }
             })
         ])
 

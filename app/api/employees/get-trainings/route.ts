@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
         
         await updateExpiredStatuses(employee.companyId)
  
-        const [trainings, requirements] = await Promise.all([
+        const [trainings, deletedTrainings, requirements] = await Promise.all([
             db.training.findMany({
                 where: {
                     employeeId: employeeId,
@@ -39,6 +39,13 @@ export async function POST(req: NextRequest) {
                     { position: "asc" },
                     { createdAt: "asc" }
                 ]
+            }),
+            db.training.findMany({
+                where: {
+                    employeeId: employeeId,
+                    deletedAt: { not: null }
+                },
+                select: { name: true, type: true }
             }),
             db.companyRequiredDocument.findMany({
                 where: {
@@ -53,29 +60,6 @@ export async function POST(req: NextRequest) {
             })
         ])
 
-        // Normalize employee trainings positions in database if any is 0 or duplicates exist
-        const trainingPositions = trainings.map(t => t.position)
-        const hasTrainingZeroOrDuplicates = trainingPositions.some(p => p === 0) || new Set(trainingPositions).size !== trainingPositions.length
-        if (hasTrainingZeroOrDuplicates && trainings.length > 0) {
-            await db.$transaction(
-                trainings.map((t, idx) =>
-                    db.training.update({
-                        where: { id: t.id },
-                        data: { position: idx + 1 }
-                    })
-                )
-            )
-            // Re-fetch trainings
-            trainings.length = 0
-            trainings.push(...(await db.training.findMany({
-                where: { employeeId: employeeId, deletedAt: null },
-                orderBy: [
-                    { position: "asc" },
-                    { createdAt: "asc" }
-                ]
-            })))
-        }
-
         // Normalize company required trainings positions in database if any is 0 or duplicates exist
         const reqPositions = requirements.map(r => r.position)
         const hasReqZeroOrDuplicates = reqPositions.some(p => p === 0) || new Set(reqPositions).size !== reqPositions.length
@@ -88,22 +72,27 @@ export async function POST(req: NextRequest) {
                     })
                 )
             )
-            // Re-fetch requirements
-            requirements.length = 0
-            requirements.push(...(await db.companyRequiredDocument.findMany({
-                where: { companyId: employee.companyId, target: "EMPLOYEE_TRAINING", isEnabled: true },
-                orderBy: [
-                    { position: "asc" },
-                    { createdAt: "asc" }
-                ]
-            })))
+            requirements.forEach((req, idx) => {
+                req.position = idx + 1
+            })
         }
+
+        // Map training position to matching requirement position if training.position is 0
+        trainings.forEach(t => {
+            if (!t.position || t.position <= 0) {
+                const req = requirements.find(r => r.name === t.name)
+                if (req && req.position > 0) {
+                    t.position = req.position
+                }
+            }
+        })
  
         const mergedTrainings = [...trainings]
 
         requirements.forEach(req => {
             const exists = trainings.find(t => t.type === "CUSTOM" && t.name === req.name)
-            if (!exists) {
+            const wasDeleted = deletedTrainings.some(t => t.type === "CUSTOM" && t.name === req.name)
+            if (!exists && !wasDeleted) {
                 mergedTrainings.push({
                     id: `virtual-${req.id}`,
                     type: "CUSTOM",
@@ -122,12 +111,36 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        // Sort deterministically: primary by position, secondary by name (never by createdAt)
         mergedTrainings.sort((a, b) => {
             const posA = a.position ?? 0
             const posB = b.position ?? 0
             if (posA !== posB) return posA - posB
-            return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            const nameComp = (a.name || "").localeCompare(b.name || "", "pt-BR")
+            if (nameComp !== 0) return nameComp
+            return (a.id || "").localeCompare(b.id || "")
         })
+
+        // Ensure 1-based sequential positions (1..N) and persist DB trainings if position changed
+        const updatesToPersist: Promise<any>[] = []
+        mergedTrainings.forEach((item, idx) => {
+            const correctPosition = idx + 1
+            if (item.position !== correctPosition) {
+                item.position = correctPosition
+                if (!item.id.startsWith("virtual-")) {
+                    updatesToPersist.push(
+                        db.training.update({
+                            where: { id: item.id },
+                            data: { position: correctPosition }
+                        })
+                    )
+                }
+            }
+        })
+
+        if (updatesToPersist.length > 0) {
+            await Promise.all(updatesToPersist)
+        }
 
         return NextResponse.json(mergedTrainings)
     } catch (error) {
