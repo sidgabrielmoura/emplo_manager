@@ -8,7 +8,9 @@ import { useCostCentersStore } from '@/stores/cost-centers'
 import { useImportsStore } from '@/stores/imports'
 import axios from 'axios'
 
-const base_url = process.env.NEXT_PUBLIC_API_URL
+const base_url = typeof window !== 'undefined'
+    ? '/api'
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api')
 
 export function resetAllCompanyStores() {
     useCompanyStore.company_selected = null
@@ -705,6 +707,18 @@ export async function getPassportHistory(companyId: string) {
 
         usePassportStore.emissions = data
 
+        return data
+    } catch (error) {
+        throw error
+    }
+}
+
+export async function getPassportView(employeeId: string) {
+    try {
+        const { data } = await axios.get(
+            `/passport/view/${employeeId}`,
+            { baseURL: base_url }
+        )
         return data
     } catch (error) {
         throw error

@@ -1,17 +1,16 @@
 "use client"
 
 import { getDaysRemaining } from "@/lib/utils"
-
 import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { showEmployee, GetCompanies, getTrainings } from "@/actions/requests"
+import { useParams } from "next/navigation"
+import { getPassportView } from "@/actions/requests"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
 import { useCompanyStore } from "@/stores/company"
 import { useUserStore } from "@/stores/user"
 import { QRCodeSVG } from "qrcode.react"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Printer, Loader2, ShieldCheck, Mail, Phone, Calendar, MapPin } from "lucide-react"
+import { ArrowLeft, Printer, ShieldCheck, Phone, AlertCircle } from "lucide-react"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 
@@ -19,7 +18,7 @@ const TRAININGS_PT_BR: Record<string, string> = {
     NR10_SEGURANCA_ELETRICIDADE_40H: "NR-10 Segurança em Eletricidade 40 Horas",
     NR10_SEP_SISTEMA_ELETRICO_POTENCIA: "NR-10 SEP Sistema Elétrico de Potência",
     CARTA_ANUENCIA_SEP_208: "Carta de anuência SEP",
-    CNH_CARTEIRA_NACIONAL_HABILITACAO: "CNH - Habitação Nacional",
+    CNH_CARTEIRA_NACIONAL_HABILITACAO: "CNH - Habilitação Nacional",
     TREINAMENTO_DIRECAO_DEFENSIVA_208: "Direção defensiva",
     CURSO_MANUSEIO_EMERGENCIAS_QUIMICAS: "Emergências Químicas",
     CARTA_ANUENCIA_NR12_208: "Carta de anuência NR-12",
@@ -38,11 +37,14 @@ const TRAININGS_PT_BR: Record<string, string> = {
 
 export default function PassportViewPage() {
     const params = useParams<{ id: string }>()
-    const employee = useSnapshot(useEmployeesStore).show_employee
-    const trainings = useSnapshot(useEmployeesStore).employee_trainings
-    const company = useSnapshot(useCompanyStore).company_selected
+    const storeEmployee = useSnapshot(useEmployeesStore).show_employee
+    const storeTrainings = useSnapshot(useEmployeesStore).employee_trainings
+    const storeCompany = useSnapshot(useCompanyStore).company_selected
     const user = useSnapshot(useUserStore).user
+
+    const [passportData, setPassportData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [pageUrl, setPageUrl] = useState("")
 
     useEffect(() => {
@@ -52,27 +54,39 @@ export default function PassportViewPage() {
     }, [])
 
     useEffect(() => {
-        if (!params.id) return
+        if (!params?.id) return
 
         const fetchData = async () => {
             setLoading(true)
+            setError(null)
             try {
-                await showEmployee(params.id)
-                await getTrainings(params.id)
-                if (user?.id && !company) {
-                    await GetCompanies(user.id)
+                const data = await getPassportView(params.id)
+                setPassportData(data)
+                if (data?.employee) {
+                    useEmployeesStore.show_employee = data.employee
                 }
-            } catch (error) {
-                console.error(error)
+                if (data?.trainings) {
+                    useEmployeesStore.employee_trainings = data.trainings
+                }
+                if (data?.company) {
+                    useCompanyStore.company_selected = data.company
+                }
+            } catch (err: any) {
+                console.error("GET PASSPORT VIEW ERROR:", err)
+                setError("Perfil de qualificação não encontrado ou indisponível.")
             } finally {
                 setLoading(false)
             }
         }
 
         fetchData()
-    }, [params.id, user?.id])
+    }, [params?.id])
 
-    if (loading || !employee) {
+    const employee = passportData?.employee || storeEmployee
+    const trainings = passportData?.trainings || storeTrainings
+    const company = passportData?.company || storeCompany
+
+    if (loading) {
         return (
             <div className="min-h-screen w-full bg-slate-50 p-4 sm:p-10 font-sans text-slate-900 pb-20 flex flex-col items-center">
                 <div className="mx-auto mb-8 w-full flex justify-between items-center print:hidden">
@@ -103,24 +117,23 @@ export default function PassportViewPage() {
 
                             <div className="space-y-4 pt-6">
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Skeleton className="h-24 w-full rounded-2xl" />
-                                    <Skeleton className="h-24 w-full rounded-2xl" />
+                                    <Skeleton className="h-20 rounded-2xl" />
+                                    <Skeleton className="h-20 rounded-2xl" />
                                 </div>
-                                <Skeleton className="h-20 w-full rounded-2xl" />
+                                <Skeleton className="h-16 rounded-2xl" />
                             </div>
 
                             <div className="flex items-center gap-8 pt-6 border-t border-slate-100">
-                                <Skeleton className="w-[100px] h-[100px] rounded-2xl" />
+                                <Skeleton className="w-24 h-24 rounded-2xl" />
                                 <div className="flex-1 space-y-2">
-                                    <Skeleton className="h-5 w-40" />
-                                    <Skeleton className="h-4 w-56" />
+                                    <Skeleton className="h-4 w-32" />
+                                    <Skeleton className="h-3 w-48" />
                                 </div>
                             </div>
                         </div>
 
                         <div className="px-8 pb-8">
                             <Skeleton className="h-14 w-full rounded-2xl" />
-                            <Skeleton className="h-3 w-48 mx-auto mt-4" />
                         </div>
                     </div>
                 </div>
@@ -128,16 +141,40 @@ export default function PassportViewPage() {
         )
     }
 
+    if (error || !employee) {
+        return (
+            <div className="min-h-screen bg-slate-50 p-4 sm:p-10 font-sans flex flex-col items-center justify-center">
+                <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-sm border border-slate-100 text-center space-y-4">
+                    <div className="w-16 h-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mx-auto">
+                        <AlertCircle className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-xl font-bold text-slate-800">Perfil Indisponível</h2>
+                    <p className="text-sm text-slate-500">
+                        {error || "Não foi possível encontrar as informações deste perfil de qualificação."}
+                    </p>
+                    <Button onClick={() => window.location.reload()} className="w-full mt-4 bg-slate-900 text-white rounded-xl">
+                        Tentar novamente
+                    </Button>
+                </div>
+            </div>
+        )
+    }
 
     const monitoringItems = (trainings || [])
         .filter((t: any) => t.isEnabled !== false)
         .map((t: any) => ({
-            name: t.type === "CUSTOM" ? (t.name || "Treinamento personalizado") : (TRAININGS_PT_BR[t.type] || t.type.replaceAll("_", " ")),
+            name: t.type === "CUSTOM"
+                ? (t.name || "Treinamento personalizado")
+                : (t.type ? (TRAININGS_PT_BR[t.type] || t.type.replaceAll("_", " ")) : (t.name || "Treinamento")),
             status: t.status,
             expiry: t.expiresAt ? getDaysRemaining(t.expiresAt) : "—"
         }))
 
-    const allApproved = monitoringItems.every(item => item.status === "APPROVED")
+    const allApproved = monitoringItems.every((item: any) => item.status === "APPROVED")
+    const emissionDate = passportData?.emission?.issuedAt
+        ? new Date(passportData.emission.issuedAt).toLocaleDateString("pt-BR")
+        : new Date().toLocaleDateString("pt-BR")
+    const qrCodeUrl = pageUrl || (typeof window !== "undefined" ? window.location.href : "")
 
     return (
         <div className="min-h-screen bg-slate-50 p-4 sm:p-10 font-sans text-slate-900 pb-20">
@@ -172,7 +209,7 @@ export default function PassportViewPage() {
                             </div>
 
                             <div className="max-h-[600px] overflow-auto print:max-h-none print:overflow-visible">
-                                {monitoringItems.length > 0 ? monitoringItems.map((item, idx) => (
+                                {monitoringItems.length > 0 ? monitoringItems.map((item: any, idx: number) => (
                                     <div key={idx} className="grid grid-cols-12 text-[11px] border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                                         <div className="col-span-7 p-3 flex flex-col gap-1">
                                             <span className="font-semibold text-slate-700 capitalize line-clamp-1">{item.name}</span>
@@ -237,7 +274,7 @@ export default function PassportViewPage() {
 
                         <div className="flex items-center gap-8 pt-6 border-t border-slate-100">
                             <div className="p-3 bg-white rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.08)] border border-slate-50">
-                                <QRCodeSVG value={pageUrl} size={80} level="M" />
+                                <QRCodeSVG value={qrCodeUrl} size={80} level="M" />
                             </div>
                             <div className="flex-1 space-y-1.5">
                                 <h4 className="text-slate-900 font-bold text-sm tracking-tight capitalize">
@@ -255,7 +292,7 @@ export default function PassportViewPage() {
                             {allApproved ? "Habilitado para o Trabalho" : "Apto com Restrições"}
                         </div>
                         <p className="text-center text-[10px] text-slate-400 mt-4 font-medium italic">
-                            Documento emitido digitalmente em {new Date().toLocaleDateString("pt-BR")}
+                            Documento emitido digitalmente em {emissionDate}
                         </p>
                     </div>
                 </div>
