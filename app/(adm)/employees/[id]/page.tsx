@@ -10,12 +10,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ArrowLeft, Mail, Calendar, Download, FileText, Upload, Loader2, Pencil, Eye, MapPin, CheckCircle2, Trash2, ArrowUp, ArrowDown, AlertCircle } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus, downloadPersonalDocsZip, deleteEmployeeDocuments, deleteEmployeeTrainings, swapEmployeeDocuments, swapEmployeeTrainings } from "@/actions/requests"
+import { getDocsOfEmployee, getTrainings, showEmployee, updateEmployeeData, updateEmployeeDocument, updateTraining, uploadImage, downloadFile, downloadTrainingsZip, getCostCenters, addEmployeeDocument, toggleEmployeeDocumentStatus, addEmployeeTraining, toggleEmployeeTrainingStatus, downloadPersonalDocsZip, deleteEmployeeDocuments, deleteEmployeeTrainings, swapEmployeeDocuments, swapEmployeeTrainings, deleteEmployee } from "@/actions/requests"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogClose, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
@@ -33,6 +44,7 @@ import { useUserStore } from "@/stores/user"
 export default function EmployeeProfilePage() {
   const employee = useSnapshot(useEmployeesStore).show_employee
   const params = useParams<{ id: string }>()
+  const router = useRouter()
   const documents = useSnapshot(useEmployeesStore).employee_documents
   const trainings = useSnapshot(useEmployeesStore).employee_trainings
   const costCenters = useSnapshot(useCostCentersStore).costCenters
@@ -43,7 +55,25 @@ export default function EmployeeProfilePage() {
   const canEditEmployees = !isSpy || (spyPermissions["employees"]?.edit === true)
   const canEditDocuments = !isSpy || (spyPermissions["documents"]?.edit === true)
   const [pageLoading, setPageLoading] = useState(true)
+  const [isDeletingEmployee, setIsDeletingEmployee] = useState(false)
   const closeUpdateEmployeeSheet = useRef<HTMLButtonElement>(null)
+
+  async function handleDeleteEmployee() {
+    if (!employee?.id) return
+    setIsDeletingEmployee(true)
+    try {
+      await deleteEmployee(employee.id)
+      toast.success("Funcionário excluído com sucesso!")
+      if (useEmployeesStore.employees) {
+        useEmployeesStore.employees = useEmployeesStore.employees.filter((e) => e.id !== employee.id)
+      }
+      useEmployeesStore.show_employee = null
+      router.push("/employees")
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.message || "Erro ao excluir funcionário")
+      setIsDeletingEmployee(false)
+    }
+  }
   const [docsLoading, setDocsLoading] = useState(true)
   const [trainingsLoading, setTrainingsLoading] = useState(true)
   const [docWidth, setDocWidth] = useState(250)
@@ -676,9 +706,63 @@ export default function EmployeeProfilePage() {
               </div>
 
               {canEditEmployees && (
-                <Sheet>
-                  <SheetTrigger asChild>
-                    <Button onClick={() => {
+                <div className="flex items-center gap-2">
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="cursor-pointer border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 font-bold gap-2 rounded-xl"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Excluir
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="rounded-3xl border-slate-100 max-w-md">
+                      <AlertDialogHeader>
+                        <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-2">
+                          <Trash2 className="w-6 h-6 text-red-600" />
+                        </div>
+                        <AlertDialogTitle className="text-xl font-black text-slate-900">
+                          Excluir Funcionário?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-slate-500 font-medium text-sm leading-relaxed">
+                          Tem certeza que deseja excluir permanentemente o funcionário{" "}
+                          <strong className="text-slate-800 font-bold">{employee.name}</strong>?
+                          <br /><br />
+                          Todos os documentos, treinamentos e dados cadastrais vinculados serão removidos definitivamente. Esta ação não poderá ser revertida.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-4 gap-2">
+                        <AlertDialogCancel
+                          disabled={isDeletingEmployee}
+                          className="rounded-xl font-bold h-11 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+                        >
+                          Cancelar
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                          disabled={isDeletingEmployee}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            handleDeleteEmployee()
+                          }}
+                          className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold h-11 px-5 shadow-lg shadow-red-100 cursor-pointer"
+                        >
+                          {isDeletingEmployee ? (
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              <span>Excluindo...</span>
+                            </div>
+                          ) : (
+                            "Sim, Excluir"
+                          )}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+
+                  <Sheet>
+                    <SheetTrigger asChild>
+                      <Button onClick={() => {
                     setForm({
                       name: employee.name,
                       email: employee.email,
@@ -919,8 +1003,9 @@ export default function EmployeeProfilePage() {
                   <SheetClose ref={closeUpdateEmployeeSheet} />
                 </SheetContent>
                 </Sheet>
-              )}
-            </div>
+              </div>
+            )}
+          </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 text-sm mt-8">
 

@@ -1759,3 +1759,38 @@ export async function deleteCompanyDocs(payload: {
     }
 }
 
+export async function deleteEmployee(employeeId: string) {
+    try {
+        const { data } = await axios.delete(
+            `/employees/delete-employee`,
+            {
+                data: { employeeId },
+                params: { id: employeeId },
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteEmployee error:", error)
+        throw error
+    }
+}
+
+export async function deleteEmployees(employeeIds: string[]) {
+    try {
+        const { data } = await axios.delete(
+            `/employees/delete-employee`,
+            {
+                data: { employeeIds },
+                baseURL: base_url,
+                withCredentials: true
+            }
+        )
+        return data
+    } catch (error) {
+        console.error("deleteEmployees error:", error)
+        throw error
+    }
+}
+

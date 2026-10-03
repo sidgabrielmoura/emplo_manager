@@ -21,15 +21,26 @@ import {
   Building2,
   LayoutGrid,
   List,
-  ArrowUpDown
+  ArrowUpDown,
+  Trash2
 } from "lucide-react"
 import { useSnapshot } from "valtio"
 import { useEmployeesStore } from "@/stores/employees"
-import { downloadEmployeeZip, getEmployees } from "@/actions/requests"
+import { downloadEmployeeZip, getEmployees, deleteEmployee } from "@/actions/requests"
 import { useCompanyStore } from "@/stores/company"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { useUserStore } from "@/stores/user"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type SortOption = "name-asc" | "name-desc" | "date-desc" | "date-asc"
 
@@ -45,6 +56,8 @@ export function EmployeesContent() {
   const isSpy = (userStore.user?.role as string) === "ESPIAO"
   const spyPermissions = (userStore.user as any)?.permissions || {}
   const canEditEmployees = !isSpy || (spyPermissions["employees"]?.edit === true)
+  const [employeeToDelete, setEmployeeToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // Persist view mode preference in localStorage
   useEffect(() => {
@@ -72,6 +85,25 @@ export function EmployeesContent() {
       toast.error(error?.message || "Erro ao baixar arquivos")
     } finally {
       setZipLoadingId(null)
+    }
+  }
+
+  async function handleConfirmDelete(id: string) {
+    setDeletingId(id)
+    try {
+      await deleteEmployee(id)
+      toast.success("Funcionário excluído com sucesso!")
+      if (useEmployeesStore.employees) {
+        useEmployeesStore.employees = useEmployeesStore.employees.filter((e) => e.id !== id)
+      }
+      if (companyStore.company_selected?.id) {
+        getEmployees(companyStore.company_selected.id).catch(console.error)
+      }
+      setEmployeeToDelete(null)
+    } catch (error: any) {
+      toast.error(error?.response?.data?.error || error?.message || "Erro ao excluir funcionário")
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -378,6 +410,18 @@ export function EmployeesContent() {
                       : <FileDown className="w-4 h-4" />}
                     Baixar Arquivos
                   </Button>
+
+                  {canEditEmployees && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="w-10 h-10 shrink-0 cursor-pointer rounded-xl border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all"
+                      title="Excluir funcionário"
+                      onClick={() => setEmployeeToDelete({ id: employee.id, name: employee.name })}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -470,6 +514,17 @@ export function EmployeesContent() {
                           )}
                           <span className="hidden sm:inline">Baixar</span>
                         </Button>
+                        {canEditEmployees && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 w-8 p-0 rounded-lg text-xs font-bold border-slate-200 text-slate-400 hover:text-red-600 hover:bg-red-50 hover:border-red-100 cursor-pointer"
+                            title="Excluir funcionário"
+                            onClick={() => setEmployeeToDelete({ id: employee.id, name: employee.name })}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -479,6 +534,53 @@ export function EmployeesContent() {
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmação de Exclusão */}
+      <AlertDialog open={!!employeeToDelete} onOpenChange={(open) => !open && !deletingId && setEmployeeToDelete(null)}>
+        <AlertDialogContent className="rounded-3xl border-slate-100 max-w-md">
+          <AlertDialogHeader>
+            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mb-2">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <AlertDialogTitle className="text-xl font-black text-slate-900">
+              Excluir Funcionário?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 font-medium text-sm leading-relaxed">
+              Tem certeza que deseja excluir permanentemente o funcionário{" "}
+              <strong className="text-slate-800 font-bold">{employeeToDelete?.name}</strong>?
+              <br /><br />
+              Todos os documentos, treinamentos e dados cadastrais vinculados serão removidos definitivamente. Esta ação não poderá ser revertida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4 gap-2">
+            <AlertDialogCancel
+              disabled={!!deletingId}
+              className="rounded-xl font-bold h-11 border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer"
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!!deletingId}
+              onClick={(e) => {
+                e.preventDefault()
+                if (employeeToDelete) {
+                  handleConfirmDelete(employeeToDelete.id)
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold h-11 px-5 shadow-lg shadow-red-100 cursor-pointer"
+            >
+              {deletingId ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Excluindo...</span>
+                </div>
+              ) : (
+                "Sim, Excluir"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
