@@ -280,6 +280,10 @@ export default function CompanySettingsPage() {
     const handleSelect = (fileList?: FileList | null) => {
         if (!fileList?.[0]) return
         const selected = fileList[0]
+        if (selected.size > 50 * 1024 * 1024) {
+            toast.error("O arquivo selecionado excede 50MB. Por favor, escolha um arquivo menor.")
+            return
+        }
         setUploadFile(selected)
         setPreview(URL.createObjectURL(selected))
     }
@@ -540,12 +544,16 @@ export default function CompanySettingsPage() {
                                                                                     <div className="flex flex-col items-center gap-2 w-full">
                                                                                         <FileText className="w-8 h-8 text-emerald-500" />
                                                                                         <span className="text-sm font-semibold text-slate-700 truncate max-w-full">{uploadFile.name}</span>
+                                                                                        <span className="text-xs text-slate-500 font-medium">({(uploadFile.size / (1024 * 1024)).toFixed(2)} MB)</span>
                                                                                         <Button variant="link" onClick={() => { setUploadFile(null); setPreview(null); }} className="text-red-500 h-auto p-0 text-xs">Remover arquivo</Button>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <Button variant="outline" className="cursor-pointer border-dashed border-2 rounded-xl text-slate-600 font-bold" onClick={() => docInputRef.current?.click()}>
-                                                                                        <Upload className="w-4 h-4 mr-2" /> Selecionar Arquivo
-                                                                                    </Button>
+                                                                                    <div className="flex flex-col items-center gap-2">
+                                                                                        <Button variant="outline" className="cursor-pointer border-dashed border-2 rounded-xl text-slate-600 font-bold" onClick={() => docInputRef.current?.click()}>
+                                                                                            <Upload className="w-4 h-4 mr-2" /> Selecionar Arquivo
+                                                                                        </Button>
+                                                                                        <span className="text-xs text-slate-400">PDF, DOC, DOCX, XLS, XLSX ou imagens até 50MB</span>
+                                                                                    </div>
                                                                                 )}
                                                                             </div>
                                                                         )}

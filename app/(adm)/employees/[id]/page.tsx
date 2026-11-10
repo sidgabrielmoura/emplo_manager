@@ -446,6 +446,11 @@ export default function EmployeeProfilePage() {
 
     const selected = fileList[0]
 
+    if (selected.size > 50 * 1024 * 1024) {
+      toast.error("O arquivo selecionado excede 50MB. Por favor, escolha um arquivo menor.")
+      return
+    }
+
     if (!allowedTypes.includes(selected.type)) {
       toast.error("Formato de arquivo não permitido")
       return

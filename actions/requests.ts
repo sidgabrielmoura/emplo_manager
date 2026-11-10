@@ -342,9 +342,23 @@ export async function getAllUsers(company_id: string) {
 }
 
 export async function uploadImage(file: File, folder: string = "employees") {
-    // 1. Tenta upload direto via Presigned URL (suporta arquivos grandes de 10MB, 50MB, 100MB+ sem limite de 4.5MB da Vercel)
+    const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50MB
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+        throw new Error("O arquivo selecionado excede 50MB. O tamanho máximo permitido é de 50MB.")
+    }
+
+    // 1. Obtém a URL pré-assinada (apenas metadados em JSON, nenhum byte do arquivo é enviado ao Next.js)
+    let presign: {
+        uploadUrl: string
+        url: string
+        public_id: string
+        originalName: string
+        contentType?: string
+    }
+
     try {
-        const { data: presign } = await axios.post(
+        const { data } = await axios.post(
             "/upload/presign",
             {
                 fileName: file.name,
@@ -353,54 +367,48 @@ export async function uploadImage(file: File, folder: string = "employees") {
             },
             { baseURL: base_url }
         )
-
-        if (presign?.uploadUrl) {
-            const uploadRes = await fetch(presign.uploadUrl, {
-                method: "PUT",
-                body: file,
-                headers: {
-                    "Content-Type": presign.contentType || file.type || "application/octet-stream",
-                },
-            })
-
-            if (uploadRes.ok) {
-                return {
-                    url: presign.url,
-                    public_id: presign.public_id,
-                    originalName: presign.originalName || file.name,
-                }
-            } else {
-                console.warn(`Presigned PUT failed with status ${uploadRes.status}, falling back to /api/upload`)
-            }
-        }
+        presign = data
     } catch (presignError: any) {
-        console.warn("Direct R2 presigned upload failed:", presignError)
-
-        // Se o arquivo for maior que 4.5MB e o upload direto falhar (por exemplo, CORS ausente no bucket R2)
-        if (file.size > 4.5 * 1024 * 1024) {
-            throw new Error("O arquivo selecionado excede 4.5MB. Para arquivos grandes, ative a política CORS no bucket Cloudflare R2.")
-        }
+        console.error("Falha ao gerar URL pré-assinada:", presignError)
+        throw new Error(presignError?.response?.data?.error || presignError?.message || "Erro ao preparar o upload do arquivo.")
     }
 
-    // 2. Fallback para rota tradicional /api/upload (arquivos normais ou ambientes locais)
-    try {
-        const formData = new FormData()
-        formData.append("file", file)
-        formData.append("folder", folder)
+    if (!presign?.uploadUrl) {
+        throw new Error("URL pré-assinada não retornada pelo servidor.")
+    }
 
-        const { data } = await axios.post("/upload", formData, {
-            baseURL: base_url,
+    // 2. Upload direto do navegador para o Cloudflare R2 (sem passar pelo servidor Next.js)
+    try {
+        const uploadRes = await fetch(presign.uploadUrl, {
+            method: "PUT",
+            body: file,
             headers: {
-                "Content-Type": "multipart/form-data",
+                "Content-Type": presign.contentType || file.type || "application/octet-stream",
             },
         })
 
-        return data
-    } catch (error: any) {
-        if (error?.response?.status === 413) {
-            throw new Error("O arquivo selecionado é muito grande (limite de payload excedido pelo servidor).")
+        if (!uploadRes.ok) {
+            const errorText = await uploadRes.text().catch(() => "")
+            console.error(`Presigned PUT failed [${uploadRes.status}]:`, errorText)
+
+            if (uploadRes.status === 403) {
+                throw new Error("Acesso negado (403) no upload para o Cloudflare R2. Verifique se o bucket R2 possui a política CORS configurada.")
+            }
+            throw new Error(`Falha no upload direto ao Cloudflare R2 (HTTP ${uploadRes.status}).`)
         }
-        throw new Error(error?.response?.data?.error || error?.message || "Erro ao fazer upload do arquivo")
+
+        return {
+            url: presign.url,
+            public_id: presign.public_id,
+            originalName: presign.originalName || file.name,
+        }
+    } catch (uploadError: any) {
+        console.error("Direct R2 upload error:", uploadError)
+
+        if (uploadError?.name === "TypeError" || uploadError?.message?.includes("fetch")) {
+            throw new Error("Falha de conexão no envio direto para o Cloudflare R2 (CORS). Verifique se a política CORS está ativada no bucket R2 para permitir o método PUT.")
+        }
+        throw new Error(uploadError?.message || "Erro durante o upload direto do arquivo.")
     }
 }
 

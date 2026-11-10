@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: key,
-      ContentType: contentType,
     })
 
     // URL assinada com expiração de 1 hora para upload direto
